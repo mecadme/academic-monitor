@@ -1,0 +1,34 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: academic-monitor-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/academic_monitor}
+    username: ${SPRING_DATASOURCE_USERNAME:academic_monitor}
+    password: ${SPRING_DATASOURCE_PASSWORD:change-me-local-only}
+    hikari:
+      initialization-fail-timeout: 0
+  flyway:
+    enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+app:
+  ollama:
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+  cors:
+    allowed-origins: ${FRONTEND_ORIGINS:http://localhost:3000,http://localhost:5173}
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info

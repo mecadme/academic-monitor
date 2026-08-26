@@ -1,0 +1,77 @@
+name: academic-monitor-dev
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-academic_monitor}
+      POSTGRES_USER: ${POSTGRES_USER:-academic_monitor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_dev_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    image: maven:3.9.11-eclipse-temurin-21
+    working_dir: /workspace
+    command: mvn spring-boot:run
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/academic_monitor}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-academic_monitor}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-change-me-local-only}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/workspace
+      - maven_cache:/root/.m2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+
+  frontend:
+    image: node:24-alpine
+    working_dir: /workspace
+    command: sh -c "corepack enable && corepack prepare pnpm@10.15.0 --activate && pnpm install && pnpm dev --host 0.0.0.0"
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+    ports:
+      - "3000:5173"
+    volumes:
+      - ./frontend:/workspace
+      - pnpm_store:/root/.local/share/pnpm/store
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  postgres_dev_data:
+  ollama_dev_data:
+  maven_cache:
+  pnpm_store:
+
+
+

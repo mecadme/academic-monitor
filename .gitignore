@@ -1,0 +1,39 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*token*
+*cookies*
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Java / Maven
+backend/target/
+
+# Node / Vite
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Local data and exports
+*.db
+*.sqlite
+*.dump
+exports/
+backups/
+tmp/

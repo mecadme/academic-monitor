@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Compile backend
+        working-directory: backend
+        run: mvn -B compile
+
+      - name: Test backend
+        working-directory: backend
+        run: mvn -B test
+
+      - name: Check backend format
+        working-directory: backend
+        run: mvn -B spotless:check
+
+      - name: Analyze backend
+        working-directory: backend
+        run: mvn -B spotbugs:check
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter academic-monitor-frontend...
+
+      - name: Lint frontend
+        run: pnpm --filter academic-monitor-frontend lint
+
+      - name: Test frontend
+        run: pnpm --filter academic-monitor-frontend test
+
+      - name: Build frontend
+        run: pnpm --filter academic-monitor-frontend build
+
+  compose:
+    name: Compose config
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate compose file
+        run: docker compose config
