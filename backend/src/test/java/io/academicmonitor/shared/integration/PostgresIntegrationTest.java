@@ -13,7 +13,10 @@ public abstract class PostgresIntegrationTest {
     protected static final PostgreSQLContainer<?> POSTGRES;
 
     static {
-        POSTGRES = new PostgreSQLContainer<>("postgres:18-alpine").withDatabaseName("academic_monitor_test").withUsername("test").withPassword("test");
+        POSTGRES = new PostgreSQLContainer<>("postgres:18-alpine")
+                .withDatabaseName("academic_monitor_test")
+                .withUsername("test")
+                .withPassword("test");
 
         POSTGRES.start();
     }
