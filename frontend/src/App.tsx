@@ -1,124 +1,300 @@
-import { Activity, BrainCircuit, Database, RefreshCw, Server, WifiOff } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { fetchSystemHealth } from './api';
-import type { ServiceStatus, SystemHealth } from './types';
-
-const serviceLabels: Record<string, string> = {
-  frontend: 'Frontend',
-  backend: 'Backend',
-  database: 'Database',
-  ai: 'AI Service',
-};
+import { useEffect, useState } from "react";
+import "./App.css";
+import {
+  type DashboardResult,
+  getDashboard,
+  syncDemo,
+} from "./api/demo";
 
 function App() {
-  const [health, setHealth] = useState<SystemHealth | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [dashboard, setDashboard] =
+    useState<DashboardResult | null>(null);
+
+  const [teacherUserId, setTeacherUserId] =
+    useState<string | null>(null);
+
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const frontendStatus: ServiceStatus = useMemo(
-    () => ({ name: 'frontend', status: 'UP', message: 'React app is running' }),
-    [],
-  );
-
-  async function loadHealth() {
-    setIsLoading(true);
-    setError(null);
-
+  async function loadScenario(
+    scenario: "INITIAL" | "IMPROVED",
+  ) {
     try {
-      const response = await fetchSystemHealth();
-      setHealth(response);
-    } catch (currentError) {
-      setHealth(null);
-      setError(currentError instanceof Error ? currentError.message : 'Backend is not reachable');
+      setSyncing(true);
+      setError(null);
+
+      const sync = await syncDemo(scenario);
+      setTeacherUserId(sync.teacherUserId);
+
+      const data = await getDashboard(sync.teacherUserId);
+      setDashboard(data);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error inesperado.",
+      );
     } finally {
-      setIsLoading(false);
+      setSyncing(false);
+      setLoading(false);
+    }
+  }
+
+  async function refreshDashboard() {
+    try {
+      if (!teacherUserId) {
+        return;
+      }
+
+      setError(null);
+      const data = await getDashboard(teacherUserId);
+      setDashboard(data);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo actualizar el dashboard.",
+      );
     }
   }
 
   useEffect(() => {
-    void loadHealth();
+    loadScenario("INITIAL");
   }, []);
 
-  const services = [frontendStatus, ...(health?.services ?? fallbackBackendServices(error))];
-  const systemStatus = error ? 'DEGRADED' : (health?.status ?? 'DEGRADED');
+  if (loading) {
+    return (
+      <main className="app-shell loading-shell">
+        <div className="loading-card">
+          <h1>Academic Monitor</h1>
+          <p>Preparando entorno de demostración...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (error && !dashboard) {
+    return (
+      <main className="app-shell loading-shell">
+        <div className="loading-card">
+          <h1>No se pudo cargar Academic Monitor</h1>
+          <p>{error}</p>
+
+          <button
+            className="btn btn-primary"
+            onClick={() => loadScenario("INITIAL")}
+          >
+            Reintentar
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!dashboard) {
+    return null;
+  }
 
   return (
     <main className="app-shell">
-      <section className="status-panel" aria-labelledby="status-title">
-        <div className="panel-heading">
+      <header className="topbar">
+        <div className="container topbar-content">
           <div>
-            <p className="eyebrow">Academic Monitor</p>
-            <h1 id="status-title">Estado del sistema</h1>
+            <p className="eyebrow">MODO DEMO</p>
+            <h1 className="brand-title">
+              Academic Monitor
+            </h1>
+            <p className="brand-subtitle">
+              Monitoreo automático de alertas académicas
+            </p>
           </div>
+
+          <div className="actions">
+            <button
+              className="btn btn-secondary"
+              disabled={syncing}
+              onClick={() => loadScenario("INITIAL")}
+            >
+              {syncing
+                ? "Procesando..."
+                : "Sincronizar"}
+            </button>
+
+            <button
+              className="btn btn-primary"
+              disabled={syncing}
+              onClick={() => loadScenario("IMPROVED")}
+            >
+              {syncing
+                ? "Procesando..."
+                : "Simular mejora"}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <section className="container hero">
+        <div className="hero-text">
+          <p className="section-label">
+            Curso monitoreado
+          </p>
+          <h2 className="course-title">
+            {dashboard.courseName}
+          </h2>
+          <p className="course-subtitle">
+            {dashboard.subject}
+          </p>
+        </div>
+
+        <div className="hero-note">
+          <p className="hero-note-title">
+            Regla de alerta
+          </p>
+          <p>
+            <strong>Crítico:</strong> nota ≤ 5.00
+          </p>
+          <p>
+            <strong>Aviso:</strong> nota {">"} 5.00 y
+            ≤ 7.00
+          </p>
+        </div>
+      </section>
+
+      {error && (
+        <section className="container">
+          <div className="error-banner">
+            {error}
+          </div>
+        </section>
+      )}
+
+      <section className="container summary-grid">
+        <SummaryCard
+          label="Estudiantes"
+          value={dashboard.summary.totalStudents}
+        />
+        <SummaryCard
+          label="Alertas abiertas"
+          value={dashboard.summary.openAlerts}
+        />
+        <SummaryCard
+          label="Avisos"
+          value={dashboard.summary.warnings}
+        />
+        <SummaryCard
+          label="Críticos"
+          value={dashboard.summary.critical}
+        />
+      </section>
+
+      <section className="container panel">
+        <div className="panel-header">
+          <div>
+            <p className="section-label">
+              Actividad analizada
+            </p>
+            <h3 className="panel-title">
+              {dashboard.activity.name}
+            </h3>
+          </div>
+
           <button
-            className="icon-button"
-            type="button"
-            onClick={loadHealth}
-            title="Actualizar estado"
-            aria-label="Actualizar estado"
+            className="btn btn-ghost"
+            onClick={refreshDashboard}
           >
-            <RefreshCw size={18} aria-hidden="true" />
+            Actualizar vista
           </button>
         </div>
 
-        <div className={`summary summary-${systemStatus.toLowerCase()}`}>
-          {systemStatus === 'UP' ? (
-            <Activity size={20} aria-hidden="true" />
-          ) : (
-            <WifiOff size={20} aria-hidden="true" />
-          )}
-          <span>{summaryText(isLoading, systemStatus)}</span>
-        </div>
+        <div className="table-wrapper">
+          <table className="dashboard-table">
+            <thead>
+            <tr>
+              <th>Estudiante</th>
+              <th>Nota</th>
+              <th>Estado</th>
+            </tr>
+            </thead>
 
-        <div className="service-list" aria-live="polite">
-          {services.map((service) => (
-            <article className="service-row" key={service.name}>
-              <div className="service-icon" aria-hidden="true">
-                {iconFor(service.name)}
-              </div>
-              <div className="service-copy">
-                <h2>{serviceLabels[service.name] ?? service.name}</h2>
-                <p>{service.message}</p>
-              </div>
-              <span className={`status-pill status-${service.status.toLowerCase()}`}>
-                {service.status === 'UP' ? 'Online' : 'Revisar'}
-              </span>
-            </article>
-          ))}
+            <tbody>
+            {dashboard.students.map((student) => (
+              <tr key={student.id}>
+                <td className="student-name">
+                  {student.name}
+                </td>
+
+                <td className="student-score">
+                  {Number(student.score).toLocaleString(
+                    "es-EC",
+                    {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    },
+                  )}
+                </td>
+
+                <td>
+                  <StatusBadge
+                    status={student.status}
+                  />
+                </td>
+              </tr>
+            ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="container footer-note">
+        <div className="footer-note-card">
+          <strong>Escenario actual:</strong>{" "}
+          Use “Sincronizar” para cargar el escenario base
+          y “Simular mejora” para mostrar la resolución
+          automática de alertas.
         </div>
       </section>
     </main>
   );
 }
 
-function summaryText(isLoading: boolean, status: string) {
-  if (isLoading) {
-    return 'Comprobando servicios';
-  }
-
-  return status === 'UP' ? 'Todos los servicios estan online' : 'Hay servicios por revisar';
+function SummaryCard({
+                       label,
+                       value,
+                     }: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <article className="summary-card">
+      <p className="summary-label">{label}</p>
+      <p className="summary-value">{value}</p>
+    </article>
+  );
 }
 
-function fallbackBackendServices(error: string | null): ServiceStatus[] {
-  const message = error ? 'Backend is not reachable yet' : 'Waiting for backend response';
+function StatusBadge({
+                       status,
+                     }: {
+  status: "OK" | "WARNING" | "CRITICAL";
+}) {
+  const labels = {
+    OK: "Bien",
+    WARNING: "Aviso",
+    CRITICAL: "Crítico",
+  };
 
-  return [
-    { name: 'backend', status: 'DEGRADED', message },
-    { name: 'database', status: 'DEGRADED', message: 'Waiting for backend health check' },
-    { name: 'ai', status: 'DEGRADED', message: 'Waiting for backend health check' },
-  ];
-}
+  const className = {
+    OK: "status-badge status-ok",
+    WARNING: "status-badge status-warning",
+    CRITICAL: "status-badge status-critical",
+  };
 
-function iconFor(serviceName: string) {
-  if (serviceName === 'database') {
-    return <Database size={20} />;
-  }
-
-  if (serviceName === 'ai') {
-    return <BrainCircuit size={20} />;
-  }
-
-  return <Server size={20} />;
+  return (
+    <span className={className[status]}>
+      {labels[status]}
+    </span>
+  );
 }
 
 export default App;
