@@ -141,6 +141,59 @@ public class IdukayAuthClient {
         return result.response();
     }
 
+    public IdukayLoginProfiles getProfilesBySchool(IdukayLoginSession session, String schoolId) {
+
+        if (session == null) {
+            throw new IllegalArgumentException("session is required");
+        }
+
+        String normalizedSchoolId = requireText(schoolId, "schoolId");
+
+        IdukayLoginProfilesRequest request = new IdukayLoginProfilesRequest(normalizedSchoolId, session.attemptId());
+
+        IdukayLoginProfilesResponse result;
+
+        try {
+            result = session.restClient()
+                    .post()
+                    .uri("login/profiles")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(IdukayLoginProfilesResponse.class);
+
+        } catch (RestClientResponseException exception) {
+
+            throw new IdukayLoginException(
+                    "Idukay login profiles request failed with HTTP "
+                            + exception.getStatusCode().value(),
+                    exception);
+
+        } catch (RestClientException exception) {
+
+            throw new IdukayLoginException("Unable to communicate with Idukay login profiles service", exception);
+        }
+
+        if (result == null) {
+            throw new IdukayLoginException("Idukay returned an empty login profiles response");
+        }
+
+        if (hasErrors(result.errors())) {
+            throw new IdukayLoginException("Idukay rejected the login profiles request");
+        }
+
+        if (result.response() == null) {
+            throw new IdukayLoginException("Idukay login profiles response did not contain profile data");
+        }
+
+        if (result.response().user() == null || result.response().user().isBlank()) {
+
+            throw new IdukayLoginException("Idukay login profiles response did not contain a user id");
+        }
+
+        return result.response();
+    }
+
     private RestClient createSessionClient() {
 
         CookieManager cookieManager = new CookieManager();

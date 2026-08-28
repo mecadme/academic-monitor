@@ -312,6 +312,146 @@ class IdukayAuthClientTest {
         assertEquals("Idukay rejected the login contexts request", exception.getMessage());
     }
 
+    @Test
+    void getProfilesBySchoolUsesSchoolAttemptIdAndLoginCookie() throws Exception {
+
+        AtomicReference<String> profilesRequestBody = new AtomicReference<>();
+
+        AtomicReference<String> profilesCookie = new AtomicReference<>();
+
+        server = createServer();
+
+        server.createContext("/api/login/web", exchange -> {
+            exchange.getResponseHeaders()
+                    .add("Set-Cookie", "login_token_test=" + "synthetic-session;" + " Path=/api;" + " HttpOnly");
+
+            sendJson(
+                    exchange,
+                    200,
+                    """
+                    {
+                      "errors": [],
+                      "response": {
+                        "attempt_id": "attempt-test-123"
+                      }
+                    }
+                    """);
+        });
+
+        server.createContext("/api/login/profiles", exchange -> {
+            profilesRequestBody.set(readBody(exchange));
+
+            profilesCookie.set(exchange.getRequestHeaders().getFirst("Cookie"));
+
+            sendJson(
+                    exchange,
+                    200,
+                    """
+                    {
+                      "errors": [],
+                      "response": {
+                        "user": "user-test-001",
+                        "profiles": [
+                          {
+                            "_id": "profile-test-001",
+                            "collection_name": "staff"
+                          },
+                          {
+                            "_id": "profile-test-002",
+                            "collection_name": "students"
+                          }
+                        ]
+                      }
+                    }
+                    """);
+        });
+
+        server.start();
+
+        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
+
+        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
+
+        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+
+        IdukayLoginSession session =
+                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), null);
+
+        IdukayLoginProfiles profiles = client.getProfilesBySchool(session, "school-test-001");
+
+        String body = profilesRequestBody.get();
+
+        assertTrue(body.contains("\"school\":\"school-test-001\""));
+
+        assertTrue(body.contains("\"attempt_id\":\"attempt-test-123\""));
+
+        assertTrue(profilesCookie.get().contains("login_token_test=" + "synthetic-session"));
+
+        assertEquals("user-test-001", profiles.user());
+
+        assertEquals(2, profiles.profiles().size());
+
+        assertEquals("profile-test-001", profiles.profiles().getFirst().id());
+
+        assertEquals("staff", profiles.profiles().getFirst().collectionName());
+
+        assertEquals("profile-test-002", profiles.profiles().get(1).id());
+
+        assertEquals("students", profiles.profiles().get(1).collectionName());
+    }
+
+    @Test
+    void getProfilesBySchoolRejectsIdukayErrors() throws Exception {
+
+        server = createServer();
+
+        server.createContext(
+                "/api/login/web",
+                exchange -> sendJson(
+                        exchange,
+                        200,
+                        """
+                    {
+                      "errors": [],
+                      "response": {
+                        "attempt_id": "attempt-test-123"
+                      }
+                    }
+                    """));
+
+        server.createContext(
+                "/api/login/profiles",
+                exchange -> sendJson(
+                        exchange,
+                        200,
+                        """
+                    {
+                      "errors": [
+                        {
+                          "code": "invalid_school"
+                        }
+                      ],
+                      "response": null
+                    }
+                    """));
+
+        server.start();
+
+        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
+
+        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
+
+        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+
+        IdukayLoginSession session =
+                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), null);
+
+        IdukayLoginException exception =
+                assertThrows(IdukayLoginException.class, () -> client.getProfilesBySchool(session, "school-test-001"));
+
+        assertEquals("Idukay rejected the login profiles request", exception.getMessage());
+    }
+
     private HttpServer createServer() throws IOException {
 
         return HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
