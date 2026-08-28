@@ -194,6 +194,121 @@ public class IdukayAuthClient {
         return result.response();
     }
 
+    public IdukayAuthenticatedSession completeLogin(
+            IdukayLoginSession session, IdukayOauthProfile profile, IdukayFingerprint fingerprint) {
+
+        if (session == null) {
+            throw new IllegalArgumentException("session is required");
+        }
+
+        if (profile == null) {
+            throw new IllegalArgumentException("profile is required");
+        }
+
+        if (fingerprint == null) {
+            throw new IllegalArgumentException("fingerprint is required");
+        }
+
+        IdukayOauthRequest request = new IdukayOauthRequest(profile, fingerprint, session.attemptId());
+
+        IdukayOauthResponse result;
+
+        try {
+            result = session.restClient()
+                    .post()
+                    .uri("login/oauth")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(IdukayOauthResponse.class);
+
+        } catch (RestClientResponseException exception) {
+
+            throw new IdukayLoginException(
+                    "Idukay OAuth request failed with HTTP "
+                            + exception.getStatusCode().value(),
+                    exception);
+
+        } catch (RestClientException exception) {
+
+            throw new IdukayLoginException("Unable to communicate with Idukay OAuth service", exception);
+        }
+
+        if (result == null) {
+            throw new IdukayLoginException("Idukay returned an empty OAuth response");
+        }
+
+        if (hasErrors(result.errors())) {
+            throw new IdukayLoginException("Idukay rejected the OAuth request");
+        }
+
+        if (result.response() == null) {
+            throw new IdukayLoginException("Idukay OAuth response did not contain session data");
+        }
+
+        String token = requireText(result.response().token(), "OAuth token");
+
+        IdukayOauthUser user = result.response().user();
+
+        if (user == null || user.preferences() == null) {
+
+            throw new IdukayLoginException("Idukay OAuth response did not contain user preferences");
+        }
+
+        IdukaySessionContext context = createSessionContext(user);
+
+        return new IdukayAuthenticatedSession(token, context, session.restClient());
+    }
+
+    private static IdukaySessionContext createSessionContext(IdukayOauthUser user) {
+
+        IdukayUserPreferences preferences = user.preferences();
+
+        if (preferences.workingYear() == null
+                || isBlank(preferences.workingYear().id())) {
+
+            throw new IdukayLoginException("Idukay session did not contain a working year");
+        }
+
+        if (preferences.workingSchool() == null
+                || isBlank(preferences.workingSchool().id())) {
+
+            throw new IdukayLoginException("Idukay session did not contain a working school");
+        }
+
+        if (preferences.workingProfile() == null
+                || isBlank(preferences.workingProfile().id())
+                || isBlank(preferences.workingProfile().collectionName())) {
+
+            throw new IdukayLoginException("Idukay session did not contain a working profile");
+        }
+
+        return new IdukaySessionContext(
+                preferences.workingYear().id(),
+                preferences.workingSchool().id(),
+                idOf(preferences.workingOrganization()),
+                idOf(preferences.selectedStudent()),
+                preferences.workingProfile().id(),
+                preferences.workingProfile().collectionName(),
+                preferences.timeZone(),
+                user.acceptedPermissions());
+    }
+
+    private static String idOf(IdukayPreferenceReference reference) {
+
+        if (reference == null || isBlank(reference.id())) {
+
+            return null;
+        }
+
+        return reference.id();
+    }
+
+    private static boolean isBlank(String value) {
+
+        return value == null || value.isBlank();
+    }
+
     private RestClient createSessionClient() {
 
         CookieManager cookieManager = new CookieManager();

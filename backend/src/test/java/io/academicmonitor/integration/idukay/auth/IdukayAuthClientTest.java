@@ -13,6 +13,8 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -452,6 +454,180 @@ class IdukayAuthClientTest {
         assertEquals("Idukay rejected the login profiles request", exception.getMessage());
     }
 
+    @Test
+    void completeLoginBuildsAuthenticatedSession() throws Exception {
+
+        AtomicReference<String> oauthRequestBody = new AtomicReference<>();
+
+        AtomicReference<String> oauthCookie = new AtomicReference<>();
+
+        server = createServer();
+
+        server.createContext("/api/login/web", exchange -> {
+            exchange.getResponseHeaders()
+                    .add("Set-Cookie", "login_token_test=" + "synthetic-session;" + " Path=/api;" + " HttpOnly");
+
+            sendJson(
+                    exchange,
+                    200,
+                    """
+                    {
+                      "errors": [],
+                      "response": {
+                        "attempt_id": "attempt-test-123"
+                      }
+                    }
+                    """);
+        });
+
+        server.createContext("/api/login/oauth", exchange -> {
+            oauthRequestBody.set(readBody(exchange));
+
+            oauthCookie.set(exchange.getRequestHeaders().getFirst("Cookie"));
+
+            sendJson(
+                    exchange,
+                    200,
+                    """
+                    {
+                      "errors": [],
+                      "response": {
+                        "token": "synthetic-oauth-token",
+                        "user": {
+                          "accepted_permissions":
+                            "growth_plans:manage;",
+                          "preferences": {
+                            "working_year": {
+                              "_id": "year-test-001"
+                            },
+                            "working_school": {
+                              "_id": "school-test-001"
+                            },
+                            "working_organization": {
+                              "_id": "organization-test-001"
+                            },
+                            "working_profile": {
+                              "_id": "profile-test-001",
+                              "collection_name": "staff"
+                            },
+                            "time_zone": "-05:00"
+                          }
+                        }
+                      }
+                    }
+                    """);
+        });
+
+        server.start();
+
+        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
+
+        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
+
+        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+
+        IdukayLoginSession loginSession =
+                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), null);
+
+        IdukayOauthProfile profile = new IdukayOauthProfile("staff", "profile-test-001", "user-test-001");
+
+        IdukayFingerprint fingerprint = syntheticFingerprint();
+
+        IdukayAuthenticatedSession session = client.completeLogin(loginSession, profile, fingerprint);
+
+        String body = oauthRequestBody.get();
+
+        assertTrue(body.contains("\"attempt_id\":\"attempt-test-123\""));
+
+        assertTrue(body.contains("\"collection_name\":\"staff\""));
+
+        assertTrue(body.contains("\"_id\":\"profile-test-001\""));
+
+        assertTrue(body.contains("\"user\":\"user-test-001\""));
+
+        assertTrue(body.contains("\"user_agent\":\"Synthetic Browser\""));
+
+        assertTrue(oauthCookie.get().contains("login_token_test=" + "synthetic-session"));
+
+        assertEquals("synthetic-oauth-token", session.authorizationToken());
+
+        IdukaySessionContext context = session.context();
+
+        assertEquals("year-test-001", context.workingYear());
+
+        assertEquals("school-test-001", context.workingSchool());
+
+        assertEquals("organization-test-001", context.workingOrganization());
+
+        assertEquals("profile-test-001", context.workingProfile());
+
+        assertEquals("staff", context.profileType());
+
+        assertEquals("-05:00", context.timeZone());
+
+        assertEquals("growth_plans:manage;", context.acceptedPermissions());
+
+        assertFalse(session.toString().contains("synthetic-oauth-token"));
+
+        assertTrue(session.toString().contains("[REDACTED]"));
+    }
+
+    @Test
+    void completeLoginRejectsIdukayErrors() throws Exception {
+
+        server = createServer();
+
+        server.createContext(
+                "/api/login/web",
+                exchange -> sendJson(
+                        exchange,
+                        200,
+                        """
+                    {
+                      "errors": [],
+                      "response": {
+                        "attempt_id": "attempt-test-123"
+                      }
+                    }
+                    """));
+
+        server.createContext(
+                "/api/login/oauth",
+                exchange -> sendJson(
+                        exchange,
+                        200,
+                        """
+                    {
+                      "errors": [
+                        {
+                          "code": "invalid_fingerprint"
+                        }
+                      ],
+                      "response": null
+                    }
+                    """));
+
+        server.start();
+
+        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
+
+        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
+
+        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+
+        IdukayLoginSession loginSession =
+                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), null);
+
+        IdukayLoginException exception = assertThrows(
+                IdukayLoginException.class,
+                () -> client.completeLogin(
+                        loginSession,
+                        new IdukayOauthProfile("staff", "profile-test-001", "user-test-001"),
+                        syntheticFingerprint()));
+
+        assertEquals("Idukay rejected the OAuth request", exception.getMessage());
+    }
+
     private HttpServer createServer() throws IOException {
 
         return HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -478,5 +654,24 @@ class IdukayAuthClientTest {
         exchange.getResponseBody().write(response);
 
         exchange.close();
+    }
+
+    private IdukayFingerprint syntheticFingerprint() {
+
+        return new IdukayFingerprint(
+                "Synthetic Browser",
+                "es-EC",
+                List.of("es-EC", "es"),
+                "SyntheticPlatform",
+                8,
+                8.0,
+                Map.of(
+                        "width", 1920,
+                        "height", 1080),
+                "America/Guayaquil",
+                0,
+                "synthetic-canvas",
+                "synthetic-webgl",
+                "synthetic-audio");
     }
 }
