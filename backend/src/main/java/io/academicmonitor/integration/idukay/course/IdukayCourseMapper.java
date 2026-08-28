@@ -1,6 +1,7 @@
 package io.academicmonitor.integration.idukay.course;
 
 import io.academicmonitor.academic.application.port.PlatformCourseSnapshot;
+import io.academicmonitor.academic.application.port.PlatformStudentSnapshot;
 import io.academicmonitor.integration.idukay.client.IdukayApiException;
 import java.util.List;
 
@@ -24,7 +25,60 @@ public final class IdukayCourseMapper {
 
         String subject = requireText(course.subject().name(), "course.subject.name");
 
-        return new PlatformCourseSnapshot(externalId, name, subject, List.of(), List.of());
+        List<PlatformStudentSnapshot> students = course.students().stream()
+                .map(IdukayCourseMapper::toStudentSnapshot)
+                .toList();
+
+        return new PlatformCourseSnapshot(externalId, name, subject, List.of(), students);
+    }
+
+    private static PlatformStudentSnapshot toStudentSnapshot(IdukayStudentDto student) {
+
+        if (student == null) {
+            throw new IdukayApiException("Idukay course contained an empty student");
+        }
+
+        String externalId = requireText(student.id(), "student._id");
+
+        if (student.relationalData() == null || student.relationalData().name() == null) {
+
+            throw new IdukayApiException("Idukay student did not contain relational_data.name");
+        }
+
+        String displayName = requireText(student.relationalData().name().show(), "student.relational_data.name.show");
+
+        ParsedName parsedName = parseDisplayName(displayName);
+
+        return new PlatformStudentSnapshot(externalId, parsedName.firstName(), parsedName.lastName());
+    }
+
+    private static ParsedName parseDisplayName(String displayName) {
+
+        int separator = displayName.indexOf(',');
+
+        /*
+         * Idukay commonly presents names as:
+         *
+         * SURNAME SECOND_SURNAME, FIRST SECOND
+         */
+        if (separator >= 0) {
+
+            String lastName = displayName.substring(0, separator).trim();
+
+            String firstName = displayName.substring(separator + 1).trim();
+
+            return new ParsedName(
+                    requireText(firstName, "student first name"), requireText(lastName, "student last name"));
+        }
+
+        /*
+         * Defensive fallback when Idukay does not provide
+         * the expected comma-separated display format.
+         *
+         * We preserve the complete display name instead of
+         * guessing which tokens are surnames.
+         */
+        return new ParsedName(displayName, "");
     }
 
     private static String requireText(String value, String field) {
@@ -36,4 +90,6 @@ public final class IdukayCourseMapper {
 
         return value.trim();
     }
+
+    private record ParsedName(String firstName, String lastName) {}
 }

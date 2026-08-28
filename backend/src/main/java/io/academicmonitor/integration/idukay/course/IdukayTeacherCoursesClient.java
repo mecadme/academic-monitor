@@ -13,9 +13,16 @@ public class IdukayTeacherCoursesClient {
 
     private static final String ENDPOINT = "teacher_courses";
 
-    private static final String SELECT = "name reference_name code subject";
+    private static final String SELECT = "name reference_name code subject students";
 
-    private static final String POPULATE = "{\"subject\":\"name\"}";
+    private static final String POPULATE =
+            """
+            {
+              "students": "relational_data",
+              "subject": "name"
+            }
+            """
+                    .replaceAll("\\s+", "");
 
     private final IdukayApiClient apiClient;
 

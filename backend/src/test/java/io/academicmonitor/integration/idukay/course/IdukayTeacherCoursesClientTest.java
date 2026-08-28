@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.academicmonitor.academic.application.port.PlatformCourseSnapshot;
+import io.academicmonitor.academic.application.port.PlatformStudentSnapshot;
 import io.academicmonitor.integration.idukay.auth.IdukayAuthenticatedSession;
 import io.academicmonitor.integration.idukay.auth.IdukaySessionContext;
 import io.academicmonitor.integration.idukay.client.IdukayApiClient;
@@ -32,7 +33,7 @@ class IdukayTeacherCoursesClientTest {
     }
 
     @Test
-    void findsTeacherCoursesAndMapsCourseMetadata() throws Exception {
+    void findsTeacherCoursesAndMapsCourseMetadataAndStudents() throws Exception {
 
         AtomicReference<String> select = new AtomicReference<>();
 
@@ -59,7 +60,27 @@ class IdukayTeacherCoursesClientTest {
                           "subject": {
                             "_id": "subject-test-001",
                             "name": "Física"
-                          }
+                          },
+                          "students": [
+                            {
+                              "_id": "student-test-001",
+                              "relational_data": {
+                                "name": {
+                                  "show": "PEREZ LOPEZ, ANA MARIA",
+                                  "order": "perez lopez, ana maria"
+                                }
+                              }
+                            },
+                            {
+                              "_id": "student-test-002",
+                              "relational_data": {
+                                "name": {
+                                  "show": "TORRES VEGA, LUIS",
+                                  "order": "torres vega, luis"
+                                }
+                              }
+                            }
+                          ]
                         },
                         {
                           "_id": "course-test-002",
@@ -69,7 +90,8 @@ class IdukayTeacherCoursesClientTest {
                           "subject": {
                             "_id": "subject-test-001",
                             "name": "Física"
-                          }
+                          },
+                          "students": []
                         }
                       ]
                     }
@@ -91,9 +113,9 @@ class IdukayTeacherCoursesClientTest {
 
         List<IdukayTeacherCourseDto> courses = coursesClient.findTeacherCourses(session);
 
-        assertEquals("name reference_name code subject", select.get());
+        assertEquals("name reference_name code subject students", select.get());
 
-        assertEquals("{\"subject\":\"name\"}", populate.get());
+        assertEquals("{\"students\":\"relational_data\",\"subject\":\"name\"}", populate.get());
 
         assertEquals(2, courses.size());
 
@@ -109,6 +131,14 @@ class IdukayTeacherCoursesClientTest {
 
         assertEquals("Física", first.subject().name());
 
+        assertEquals(2, first.students().size());
+
+        assertEquals("student-test-001", first.students().getFirst().id());
+
+        assertEquals(
+                "PEREZ LOPEZ, ANA MARIA",
+                first.students().getFirst().relationalData().name().show());
+
         PlatformCourseSnapshot snapshot = IdukayCourseMapper.toSnapshot(first);
 
         assertEquals("course-test-001", snapshot.externalId());
@@ -119,7 +149,53 @@ class IdukayTeacherCoursesClientTest {
 
         assertTrue(snapshot.activities().isEmpty());
 
-        assertTrue(snapshot.students().isEmpty());
+        assertEquals(2, snapshot.students().size());
+
+        PlatformStudentSnapshot firstStudent = snapshot.students().getFirst();
+
+        assertEquals("student-test-001", firstStudent.externalId());
+
+        assertEquals("ANA MARIA", firstStudent.firstName());
+
+        assertEquals("PEREZ LOPEZ", firstStudent.lastName());
+
+        PlatformStudentSnapshot secondStudent = snapshot.students().get(1);
+
+        assertEquals("student-test-002", secondStudent.externalId());
+
+        assertEquals("LUIS", secondStudent.firstName());
+
+        assertEquals("TORRES VEGA", secondStudent.lastName());
+
+        IdukayTeacherCourseDto second = courses.get(1);
+
+        assertTrue(second.students().isEmpty());
+    }
+
+    @Test
+    void mapperPreservesStudentDisplayNameWhenCommaIsMissing() {
+
+        IdukayTeacherCourseDto course = new IdukayTeacherCourseDto(
+                "course-test-001",
+                "Curso Demo",
+                null,
+                null,
+                new IdukaySubjectDto("subject-test-001", "Física"),
+                List.of(new IdukayStudentDto(
+                        "student-test-001",
+                        new IdukayStudentRelationalDataDto(new IdukayStudentNameDto("ANA MARIA PEREZ", null)))));
+
+        PlatformCourseSnapshot snapshot = IdukayCourseMapper.toSnapshot(course);
+
+        assertEquals(1, snapshot.students().size());
+
+        PlatformStudentSnapshot student = snapshot.students().getFirst();
+
+        assertEquals("student-test-001", student.externalId());
+
+        assertEquals("ANA MARIA PEREZ", student.firstName());
+
+        assertEquals("", student.lastName());
     }
 
     private String baseUrl() {
