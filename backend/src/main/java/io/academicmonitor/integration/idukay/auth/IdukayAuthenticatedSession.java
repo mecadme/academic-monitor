@@ -1,5 +1,6 @@
 package io.academicmonitor.integration.idukay.auth;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClient;
 
 public final class IdukayAuthenticatedSession {
@@ -12,19 +13,38 @@ public final class IdukayAuthenticatedSession {
 
         this.authorizationToken = requireText(authorizationToken, "authorizationToken");
 
+        if (context == null) {
+            throw new IllegalArgumentException("context is required");
+        }
+
+        if (restClient == null) {
+            throw new IllegalArgumentException("restClient is required");
+        }
+
         this.context = context;
         this.restClient = restClient;
     }
 
-    String authorizationToken() {
-        return authorizationToken;
+    public static IdukayAuthenticatedSession create(
+            String authorizationToken, IdukaySessionContext context, RestClient restClient) {
+
+        return new IdukayAuthenticatedSession(authorizationToken, context, restClient);
+    }
+
+    public void applyAuthorization(HttpHeaders headers) {
+
+        if (headers == null) {
+            throw new IllegalArgumentException("headers are required");
+        }
+
+        headers.set(HttpHeaders.AUTHORIZATION, authorizationToken);
     }
 
     public IdukaySessionContext context() {
         return context;
     }
 
-    RestClient restClient() {
+    public RestClient httpClient() {
         return restClient;
     }
 

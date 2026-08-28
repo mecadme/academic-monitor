@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClient;
 
 class IdukayAuthClientTest {
@@ -185,13 +186,13 @@ class IdukayAuthClientTest {
                     exchange,
                     200,
                     """
-                        {
-                          "errors": [],
-                          "response": {
-                            "attempt_id": "attempt-test-123"
-                          }
-                        }
-                        """);
+                    {
+                      "errors": [],
+                      "response": {
+                        "attempt_id": "attempt-test-123"
+                      }
+                    }
+                    """);
         });
 
         server.createContext("/api/login/contexts", exchange -> {
@@ -203,29 +204,29 @@ class IdukayAuthClientTest {
                     exchange,
                     200,
                     """
-                        {
-                          "errors": [],
-                          "response": {
-                            "user": "user-test-001",
-                            "schools": [
-                              {
-                                "_id": "school-test-001",
-                                "name": "Unidad Educativa Demo"
-                              }
-                            ],
-                            "organization": {
-                              "_id": "organization-test-001"
-                            },
-                            "is_admin": false,
-                            "profiles": [
-                              {
-                                "_id": "profile-test-001",
-                                "collection_name": "staff"
-                              }
-                            ]
+                    {
+                      "errors": [],
+                      "response": {
+                        "user": "user-test-001",
+                        "schools": [
+                          {
+                            "_id": "school-test-001",
+                            "name": "Unidad Educativa Demo"
                           }
-                        }
-                        """);
+                        ],
+                        "organization": {
+                          "_id": "organization-test-001"
+                        },
+                        "is_admin": false,
+                        "profiles": [
+                          {
+                            "_id": "profile-test-001",
+                            "collection_name": "staff"
+                          }
+                        ]
+                      }
+                    }
+                    """);
         });
 
         server.start();
@@ -273,13 +274,13 @@ class IdukayAuthClientTest {
                         exchange,
                         200,
                         """
-                        {
-                          "errors": [],
-                          "response": {
-                            "attempt_id": "attempt-test-123"
-                          }
-                        }
-                        """));
+                    {
+                      "errors": [],
+                      "response": {
+                        "attempt_id": "attempt-test-123"
+                      }
+                    }
+                    """));
 
         server.createContext(
                 "/api/login/contexts",
@@ -287,15 +288,15 @@ class IdukayAuthClientTest {
                         exchange,
                         200,
                         """
+                    {
+                      "errors": [
                         {
-                          "errors": [
-                            {
-                              "code": "invalid_attempt"
-                            }
-                          ],
-                          "response": null
+                          "code": "invalid_attempt"
                         }
-                        """));
+                      ],
+                      "response": null
+                    }
+                    """));
 
         server.start();
 
@@ -549,7 +550,11 @@ class IdukayAuthClientTest {
 
         assertTrue(oauthCookie.get().contains("login_token_test=" + "synthetic-session"));
 
-        assertEquals("synthetic-oauth-token", session.authorizationToken());
+        HttpHeaders authorizationHeaders = new HttpHeaders();
+
+        session.applyAuthorization(authorizationHeaders);
+
+        assertEquals("synthetic-oauth-token", authorizationHeaders.getFirst(HttpHeaders.AUTHORIZATION));
 
         IdukaySessionContext context = session.context();
 
