@@ -1,10 +1,13 @@
 package io.academicmonitor.integration.idukay.client;
 
 import io.academicmonitor.integration.idukay.auth.IdukayAuthenticatedSession;
+import java.net.URI;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @Component
 public class IdukayApiClient {
@@ -49,6 +52,44 @@ public class IdukayApiClient {
         }
     }
 
+    public <T> T get(
+            IdukayAuthenticatedSession session, String path, Map<String, String> queryParams, Class<T> responseType) {
+
+        if (session == null) {
+            throw new IllegalArgumentException("session is required");
+        }
+
+        String normalizedPath = requireText(path, "path");
+
+        if (responseType == null) {
+            throw new IllegalArgumentException("responseType is required");
+        }
+
+        Map<String, String> parameters = queryParams == null ? Map.of() : Map.copyOf(queryParams);
+
+        URI uri = buildUri(normalizedPath, parameters);
+
+        try {
+            return session.httpClient()
+                    .get()
+                    .uri(uri)
+                    .headers(headers -> IdukayRequestHeaders.apply(headers, session, clientVersion))
+                    .retrieve()
+                    .body(responseType);
+
+        } catch (RestClientResponseException exception) {
+
+            throw new IdukayApiException(
+                    "Idukay API request failed with HTTP "
+                            + exception.getStatusCode().value(),
+                    exception);
+
+        } catch (RestClientException exception) {
+
+            throw new IdukayApiException("Unable to communicate with Idukay API", exception);
+        }
+    }
+
     private static String requireText(String value, String field) {
 
         if (value == null || value.isBlank()) {
@@ -57,5 +98,14 @@ public class IdukayApiClient {
         }
 
         return value.trim();
+    }
+
+    private static URI buildUri(String path, Map<String, String> queryParams) {
+
+        UriComponentsBuilder builder = UriComponentsBuilder.fromPath(path);
+
+        queryParams.forEach(builder::queryParam);
+
+        return builder.build().encode().toUri();
     }
 }

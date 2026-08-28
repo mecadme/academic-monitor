@@ -1,0 +1,12 @@
+package io.academicmonitor.integration.idukay.course;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record IdukayTeacherCourseDto(
+        @JsonProperty("_id") String id,
+        String name,
+        @JsonProperty("reference_name") String referenceName,
+        String code,
+        IdukaySubjectDto subject) {}
