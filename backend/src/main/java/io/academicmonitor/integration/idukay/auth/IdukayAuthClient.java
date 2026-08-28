@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import tools.jackson.databind.JsonNode;
 
 @Component
 public class IdukayAuthClient {
@@ -94,6 +95,52 @@ public class IdukayAuthClient {
         return new IdukayLoginSession(result.response().attempt_id().trim(), sessionClient);
     }
 
+    public IdukayLoginContexts getAvailableContexts(IdukayLoginSession session) {
+
+        if (session == null) {
+            throw new IllegalArgumentException("session is required");
+        }
+
+        IdukayLoginContextsRequest request = new IdukayLoginContextsRequest(session.attemptId());
+
+        IdukayLoginContextsResponse result;
+
+        try {
+            result = session.restClient()
+                    .post()
+                    .uri("login/contexts")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(IdukayLoginContextsResponse.class);
+
+        } catch (RestClientResponseException exception) {
+
+            throw new IdukayLoginException(
+                    "Idukay login contexts request failed with HTTP "
+                            + exception.getStatusCode().value(),
+                    exception);
+
+        } catch (RestClientException exception) {
+
+            throw new IdukayLoginException("Unable to communicate with Idukay login contexts service", exception);
+        }
+
+        if (result == null) {
+            throw new IdukayLoginException("Idukay returned an empty login contexts response");
+        }
+
+        if (hasErrors(result.errors())) {
+            throw new IdukayLoginException("Idukay rejected the login contexts request");
+        }
+
+        if (result.response() == null) {
+            throw new IdukayLoginException("Idukay login contexts response did not contain context data");
+        }
+
+        return result.response();
+    }
+
     private RestClient createSessionClient() {
 
         CookieManager cookieManager = new CookieManager();
@@ -113,6 +160,25 @@ public class IdukayAuthClient {
                 .requestFactory(requestFactory)
                 .baseUrl(baseUrl)
                 .build();
+    }
+
+    private static boolean hasErrors(JsonNode errors) {
+
+        if (errors == null || errors.isNull() || errors.isMissingNode()) {
+
+            return false;
+        }
+
+        if (errors.isArray() || errors.isObject()) {
+
+            return errors.size() > 0;
+        }
+
+        if (errors.isTextual()) {
+            return !errors.asText().isBlank();
+        }
+
+        return true;
     }
 
     private static String normalizeBaseUrl(String value) {
