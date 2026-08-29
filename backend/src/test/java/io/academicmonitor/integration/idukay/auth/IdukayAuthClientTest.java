@@ -23,32 +23,53 @@ import org.springframework.web.client.RestClient;
 
 class IdukayAuthClientTest {
 
+    private static final String CLIENT_VERSION = "12.0.2";
+
     private HttpServer server;
 
     @AfterEach
     void stopServer() {
-
         if (server != null) {
             server.stop(0);
         }
     }
 
     @Test
-    void startLoginSendsExpectedPayloadAndKeepsCookies() throws Exception {
+    void startLoginSendsExpectedPayloadHeadersAndKeepsCookies()
+        throws Exception {
 
-        AtomicReference<String> loginRequestBody = new AtomicReference<>();
+        AtomicReference<String> loginRequestBody =
+            new AtomicReference<>();
 
-        AtomicReference<String> probeCookie = new AtomicReference<>();
+        AtomicReference<String> probeCookie =
+            new AtomicReference<>();
+
+        AtomicReference<String> clientVersion =
+            new AtomicReference<>();
 
         server = createServer();
 
-        server.createContext("/api/login/web", exchange -> {
-            loginRequestBody.set(readBody(exchange));
+        server.createContext(
+            "/api/login/web",
+            exchange -> {
 
-            exchange.getResponseHeaders()
-                    .add("Set-Cookie", "login_token_test=" + "synthetic-session;" + " Path=/api;" + " HttpOnly");
+                clientVersion.set(
+                    header(
+                        exchange,
+                        "ClientVersion"));
 
-            sendJson(
+                loginRequestBody.set(
+                    readBody(exchange));
+
+                exchange.getResponseHeaders()
+                    .add(
+                        "Set-Cookie",
+                        "login_token_test="
+                            + "synthetic-session;"
+                            + " Path=/api;"
+                            + " HttpOnly");
+
+                sendJson(
                     exchange,
                     200,
                     """
@@ -59,59 +80,91 @@ class IdukayAuthClientTest {
                       }
                     }
                     """);
-        });
+            });
 
-        server.createContext("/api/probe", exchange -> {
-            probeCookie.set(exchange.getRequestHeaders().getFirst("Cookie"));
+        server.createContext(
+            "/api/probe",
+            exchange -> {
 
-            exchange.sendResponseHeaders(204, -1);
+                probeCookie.set(
+                    header(
+                        exchange,
+                        "Cookie"));
 
-            exchange.close();
-        });
+                exchange.sendResponseHeaders(
+                    204,
+                    -1);
+
+                exchange.close();
+            });
 
         server.start();
 
-        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
+        CryptoJsPasswordEncoder passwordEncoder =
+            mockedPasswordEncoder();
 
-        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
-
-        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+        IdukayAuthClient client =
+            createClient(passwordEncoder);
 
         IdukayLoginSession session =
-                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), "school-demo");
+            client.startLogin(
+                "teacher@example.test",
+                "temporary-password".toCharArray(),
+                "school-demo");
 
-        assertEquals("attempt-test-123", session.attemptId());
+        assertEquals(
+            "attempt-test-123",
+            session.attemptId());
 
-        String requestBody = loginRequestBody.get();
+        assertEquals(
+            CLIENT_VERSION,
+            clientVersion.get());
 
-        assertTrue(requestBody.contains("\"email\":\"teacher@example.test\""));
+        String requestBody =
+            loginRequestBody.get();
 
-        assertTrue(requestBody.contains("\"password\":\"ENCODED_PASSWORD\""));
+        assertTrue(
+            requestBody.contains(
+                "\"email\":\"teacher@example.test\""));
 
-        assertTrue(requestBody.contains("\"subdomain_school\":\"school-demo\""));
+        assertTrue(
+            requestBody.contains(
+                "\"password\":\"ENCODED_PASSWORD\""));
 
-        assertFalse(requestBody.contains("temporary-password"));
+        assertTrue(
+            requestBody.contains(
+                "\"subdomain_school\":\"school-demo\""));
 
-        /*
-         * Verify that the RestClient kept the cookie issued
-         * by /login/web and sends it on the next request.
-         */
-        session.restClient().get().uri("probe").retrieve().toBodilessEntity();
+        assertFalse(
+            requestBody.contains(
+                "temporary-password"));
 
-        assertTrue(probeCookie.get().contains("login_token_test=" + "synthetic-session"));
+        session.restClient()
+            .get()
+            .uri("probe")
+            .retrieve()
+            .toBodilessEntity();
+
+        assertTrue(
+            probeCookie.get()
+                .contains(
+                    "login_token_test="
+                        + "synthetic-session"));
     }
 
     @Test
-    void startLoginRejectsIdukayErrors() throws Exception {
+    void startLoginRejectsIdukayErrors()
+        throws Exception {
 
         server = createServer();
 
         server.createContext(
-                "/api/login/web",
-                exchange -> sendJson(
-                        exchange,
-                        200,
-                        """
+            "/api/login/web",
+            exchange ->
+                sendJson(
+                    exchange,
+                    200,
+                    """
                     {
                       "errors": [
                         {
@@ -124,30 +177,39 @@ class IdukayAuthClientTest {
 
         server.start();
 
-        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
+        IdukayAuthClient client =
+            createClient(
+                mockedPasswordEncoder());
 
-        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
-
-        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
-
-        IdukayLoginException exception = assertThrows(
+        IdukayLoginException exception =
+            assertThrows(
                 IdukayLoginException.class,
-                () -> client.startLogin("teacher@example.test", "temporary-password".toCharArray(), "school-demo"));
+                () ->
+                    client.startLogin(
+                        "teacher@example.test",
+                        "temporary-password"
+                            .toCharArray(),
+                        "school-demo"));
 
-        assertEquals("Idukay rejected the login request", exception.getMessage());
+        assertEquals(
+            "Idukay rejected the login request: "
+                + "[invalid_credentials]",
+            exception.getMessage());
     }
 
     @Test
-    void startLoginRejectsMissingAttemptId() throws Exception {
+    void startLoginRejectsMissingAttemptId()
+        throws Exception {
 
         server = createServer();
 
         server.createContext(
-                "/api/login/web",
-                exchange -> sendJson(
-                        exchange,
-                        200,
-                        """
+            "/api/login/web",
+            exchange ->
+                sendJson(
+                    exchange,
+                    200,
+                    """
                     {
                       "errors": [],
                       "response": {}
@@ -156,33 +218,53 @@ class IdukayAuthClientTest {
 
         server.start();
 
-        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
+        IdukayAuthClient client =
+            createClient(
+                mockedPasswordEncoder());
 
-        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
-
-        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
-
-        IdukayLoginException exception = assertThrows(
+        IdukayLoginException exception =
+            assertThrows(
                 IdukayLoginException.class,
-                () -> client.startLogin("teacher@example.test", "temporary-password".toCharArray(), null));
+                () ->
+                    client.startLogin(
+                        "teacher@example.test",
+                        "temporary-password"
+                            .toCharArray(),
+                        null));
 
-        assertEquals("Idukay login response did not contain an attempt id", exception.getMessage());
+        assertEquals(
+            "Idukay login response did not contain an attempt id",
+            exception.getMessage());
     }
 
     @Test
-    void getAvailableContextsUsesAttemptIdAndLoginCookie() throws Exception {
+    void getAvailableContextsUsesAttemptIdCookieAndClientVersion()
+        throws Exception {
 
-        AtomicReference<String> contextsRequestBody = new AtomicReference<>();
+        AtomicReference<String> contextsRequestBody =
+            new AtomicReference<>();
 
-        AtomicReference<String> contextsCookie = new AtomicReference<>();
+        AtomicReference<String> contextsCookie =
+            new AtomicReference<>();
+
+        AtomicReference<String> contextsClientVersion =
+            new AtomicReference<>();
 
         server = createServer();
 
-        server.createContext("/api/login/web", exchange -> {
-            exchange.getResponseHeaders()
-                    .add("Set-Cookie", "login_token_test=" + "synthetic-session;" + " Path=/api;" + " HttpOnly");
+        server.createContext(
+            "/api/login/web",
+            exchange -> {
 
-            sendJson(
+                exchange.getResponseHeaders()
+                    .add(
+                        "Set-Cookie",
+                        "login_token_test="
+                            + "synthetic-session;"
+                            + " Path=/api;"
+                            + " HttpOnly");
+
+                sendJson(
                     exchange,
                     200,
                     """
@@ -193,14 +275,26 @@ class IdukayAuthClientTest {
                       }
                     }
                     """);
-        });
+            });
 
-        server.createContext("/api/login/contexts", exchange -> {
-            contextsRequestBody.set(readBody(exchange));
+        server.createContext(
+            "/api/login/contexts",
+            exchange -> {
 
-            contextsCookie.set(exchange.getRequestHeaders().getFirst("Cookie"));
+                contextsRequestBody.set(
+                    readBody(exchange));
 
-            sendJson(
+                contextsCookie.set(
+                    header(
+                        exchange,
+                        "Cookie"));
+
+                contextsClientVersion.set(
+                    header(
+                        exchange,
+                        "ClientVersion"));
+
+                sendJson(
                     exchange,
                     200,
                     """
@@ -227,53 +321,96 @@ class IdukayAuthClientTest {
                       }
                     }
                     """);
-        });
+            });
 
         server.start();
 
-        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
-
-        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
-
-        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+        IdukayAuthClient client =
+            createClient(
+                mockedPasswordEncoder());
 
         IdukayLoginSession session =
-                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), "school-demo");
+            client.startLogin(
+                "teacher@example.test",
+                "temporary-password".toCharArray(),
+                "school-demo");
 
-        IdukayLoginContexts contexts = client.getAvailableContexts(session);
+        IdukayLoginContexts contexts =
+            client.getAvailableContexts(
+                session);
 
-        assertTrue(contextsRequestBody.get().contains("\"attempt_id\":\"attempt-test-123\""));
+        assertTrue(
+            contextsRequestBody
+                .get()
+                .contains(
+                    "\"attempt_id\":"
+                        + "\"attempt-test-123\""));
 
-        assertTrue(contextsCookie.get().contains("login_token_test=" + "synthetic-session"));
+        assertTrue(
+            contextsCookie
+                .get()
+                .contains(
+                    "login_token_test="
+                        + "synthetic-session"));
 
-        assertEquals(1, contexts.schools().size());
+        assertEquals(
+            CLIENT_VERSION,
+            contextsClientVersion.get());
 
-        assertEquals("school-test-001", contexts.schools().getFirst().id());
+        assertEquals(
+            1,
+            contexts.schools().size());
 
-        assertEquals("Unidad Educativa Demo", contexts.schools().getFirst().name());
+        assertEquals(
+            "school-test-001",
+            contexts.schools()
+                .getFirst()
+                .id());
 
-        assertFalse(contexts.admin());
+        assertEquals(
+            "Unidad Educativa Demo",
+            contexts.schools()
+                .getFirst()
+                .name());
 
-        assertEquals(1, contexts.profiles().size());
+        assertFalse(
+            contexts.admin());
 
-        assertEquals("profile-test-001", contexts.profiles().getFirst().id());
+        assertEquals(
+            1,
+            contexts.profiles().size());
 
-        assertEquals("staff", contexts.profiles().getFirst().collectionName());
+        assertEquals(
+            "profile-test-001",
+            contexts.profiles()
+                .getFirst()
+                .id());
 
-        assertEquals("user-test-001", contexts.user().asText());
+        assertEquals(
+            "staff",
+            contexts.profiles()
+                .getFirst()
+                .collectionName());
+
+        assertEquals(
+            "user-test-001",
+            contexts.user()
+                .asText());
     }
 
     @Test
-    void getAvailableContextsRejectsIdukayErrors() throws Exception {
+    void getAvailableContextsRejectsIdukayErrors()
+        throws Exception {
 
         server = createServer();
 
         server.createContext(
-                "/api/login/web",
-                exchange -> sendJson(
-                        exchange,
-                        200,
-                        """
+            "/api/login/web",
+            exchange ->
+                sendJson(
+                    exchange,
+                    200,
+                    """
                     {
                       "errors": [],
                       "response": {
@@ -283,11 +420,12 @@ class IdukayAuthClientTest {
                     """));
 
         server.createContext(
-                "/api/login/contexts",
-                exchange -> sendJson(
-                        exchange,
-                        200,
-                        """
+            "/api/login/contexts",
+            exchange ->
+                sendJson(
+                    exchange,
+                    200,
+                    """
                     {
                       "errors": [
                         {
@@ -300,35 +438,56 @@ class IdukayAuthClientTest {
 
         server.start();
 
-        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
-
-        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
-
-        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+        IdukayAuthClient client =
+            createClient(
+                mockedPasswordEncoder());
 
         IdukayLoginSession session =
-                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), null);
+            client.startLogin(
+                "teacher@example.test",
+                "temporary-password".toCharArray(),
+                null);
 
         IdukayLoginException exception =
-                assertThrows(IdukayLoginException.class, () -> client.getAvailableContexts(session));
+            assertThrows(
+                IdukayLoginException.class,
+                () ->
+                    client.getAvailableContexts(
+                        session));
 
-        assertEquals("Idukay rejected the login contexts request", exception.getMessage());
+        assertEquals(
+            "Idukay rejected the login contexts request",
+            exception.getMessage());
     }
 
     @Test
-    void getProfilesBySchoolUsesSchoolAttemptIdAndLoginCookie() throws Exception {
+    void getProfilesBySchoolUsesSchoolAttemptIdCookieAndClientVersion()
+        throws Exception {
 
-        AtomicReference<String> profilesRequestBody = new AtomicReference<>();
+        AtomicReference<String> profilesRequestBody =
+            new AtomicReference<>();
 
-        AtomicReference<String> profilesCookie = new AtomicReference<>();
+        AtomicReference<String> profilesCookie =
+            new AtomicReference<>();
+
+        AtomicReference<String> profilesClientVersion =
+            new AtomicReference<>();
 
         server = createServer();
 
-        server.createContext("/api/login/web", exchange -> {
-            exchange.getResponseHeaders()
-                    .add("Set-Cookie", "login_token_test=" + "synthetic-session;" + " Path=/api;" + " HttpOnly");
+        server.createContext(
+            "/api/login/web",
+            exchange -> {
 
-            sendJson(
+                exchange.getResponseHeaders()
+                    .add(
+                        "Set-Cookie",
+                        "login_token_test="
+                            + "synthetic-session;"
+                            + " Path=/api;"
+                            + " HttpOnly");
+
+                sendJson(
                     exchange,
                     200,
                     """
@@ -339,14 +498,26 @@ class IdukayAuthClientTest {
                       }
                     }
                     """);
-        });
+            });
 
-        server.createContext("/api/login/profiles", exchange -> {
-            profilesRequestBody.set(readBody(exchange));
+        server.createContext(
+            "/api/login/profiles",
+            exchange -> {
 
-            profilesCookie.set(exchange.getRequestHeaders().getFirst("Cookie"));
+                profilesRequestBody.set(
+                    readBody(exchange));
 
-            sendJson(
+                profilesCookie.set(
+                    header(
+                        exchange,
+                        "Cookie"));
+
+                profilesClientVersion.set(
+                    header(
+                        exchange,
+                        "ClientVersion"));
+
+                sendJson(
                     exchange,
                     200,
                     """
@@ -367,53 +538,93 @@ class IdukayAuthClientTest {
                       }
                     }
                     """);
-        });
+            });
 
         server.start();
 
-        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
-
-        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
-
-        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+        IdukayAuthClient client =
+            createClient(
+                mockedPasswordEncoder());
 
         IdukayLoginSession session =
-                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), null);
+            client.startLogin(
+                "teacher@example.test",
+                "temporary-password".toCharArray(),
+                null);
 
-        IdukayLoginProfiles profiles = client.getProfilesBySchool(session, "school-test-001");
+        IdukayLoginProfiles profiles =
+            client.getProfilesBySchool(
+                session,
+                "school-test-001");
 
-        String body = profilesRequestBody.get();
+        String body =
+            profilesRequestBody.get();
 
-        assertTrue(body.contains("\"school\":\"school-test-001\""));
+        assertTrue(
+            body.contains(
+                "\"school\":\"school-test-001\""));
 
-        assertTrue(body.contains("\"attempt_id\":\"attempt-test-123\""));
+        assertTrue(
+            body.contains(
+                "\"attempt_id\":\"attempt-test-123\""));
 
-        assertTrue(profilesCookie.get().contains("login_token_test=" + "synthetic-session"));
+        assertTrue(
+            profilesCookie
+                .get()
+                .contains(
+                    "login_token_test="
+                        + "synthetic-session"));
 
-        assertEquals("user-test-001", profiles.user());
+        assertEquals(
+            CLIENT_VERSION,
+            profilesClientVersion.get());
 
-        assertEquals(2, profiles.profiles().size());
+        assertEquals(
+            "user-test-001",
+            profiles.user());
 
-        assertEquals("profile-test-001", profiles.profiles().getFirst().id());
+        assertEquals(
+            2,
+            profiles.profiles().size());
 
-        assertEquals("staff", profiles.profiles().getFirst().collectionName());
+        assertEquals(
+            "profile-test-001",
+            profiles.profiles()
+                .getFirst()
+                .id());
 
-        assertEquals("profile-test-002", profiles.profiles().get(1).id());
+        assertEquals(
+            "staff",
+            profiles.profiles()
+                .getFirst()
+                .collectionName());
 
-        assertEquals("students", profiles.profiles().get(1).collectionName());
+        assertEquals(
+            "profile-test-002",
+            profiles.profiles()
+                .get(1)
+                .id());
+
+        assertEquals(
+            "students",
+            profiles.profiles()
+                .get(1)
+                .collectionName());
     }
 
     @Test
-    void getProfilesBySchoolRejectsIdukayErrors() throws Exception {
+    void getProfilesBySchoolRejectsIdukayErrors()
+        throws Exception {
 
         server = createServer();
 
         server.createContext(
-                "/api/login/web",
-                exchange -> sendJson(
-                        exchange,
-                        200,
-                        """
+            "/api/login/web",
+            exchange ->
+                sendJson(
+                    exchange,
+                    200,
+                    """
                     {
                       "errors": [],
                       "response": {
@@ -423,11 +634,12 @@ class IdukayAuthClientTest {
                     """));
 
         server.createContext(
-                "/api/login/profiles",
-                exchange -> sendJson(
-                        exchange,
-                        200,
-                        """
+            "/api/login/profiles",
+            exchange ->
+                sendJson(
+                    exchange,
+                    200,
+                    """
                     {
                       "errors": [
                         {
@@ -440,35 +652,57 @@ class IdukayAuthClientTest {
 
         server.start();
 
-        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
-
-        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
-
-        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+        IdukayAuthClient client =
+            createClient(
+                mockedPasswordEncoder());
 
         IdukayLoginSession session =
-                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), null);
+            client.startLogin(
+                "teacher@example.test",
+                "temporary-password".toCharArray(),
+                null);
 
         IdukayLoginException exception =
-                assertThrows(IdukayLoginException.class, () -> client.getProfilesBySchool(session, "school-test-001"));
+            assertThrows(
+                IdukayLoginException.class,
+                () ->
+                    client.getProfilesBySchool(
+                        session,
+                        "school-test-001"));
 
-        assertEquals("Idukay rejected the login profiles request", exception.getMessage());
+        assertEquals(
+            "Idukay rejected the login profiles request",
+            exception.getMessage());
     }
 
     @Test
-    void completeLoginBuildsAuthenticatedSession() throws Exception {
+    void completeLoginBuildsAuthenticatedSession()
+        throws Exception {
 
-        AtomicReference<String> oauthRequestBody = new AtomicReference<>();
+        AtomicReference<String> oauthRequestBody =
+            new AtomicReference<>();
 
-        AtomicReference<String> oauthCookie = new AtomicReference<>();
+        AtomicReference<String> oauthCookie =
+            new AtomicReference<>();
+
+        AtomicReference<String> oauthClientVersion =
+            new AtomicReference<>();
 
         server = createServer();
 
-        server.createContext("/api/login/web", exchange -> {
-            exchange.getResponseHeaders()
-                    .add("Set-Cookie", "login_token_test=" + "synthetic-session;" + " Path=/api;" + " HttpOnly");
+        server.createContext(
+            "/api/login/web",
+            exchange -> {
 
-            sendJson(
+                exchange.getResponseHeaders()
+                    .add(
+                        "Set-Cookie",
+                        "login_token_test="
+                            + "synthetic-session;"
+                            + " Path=/api;"
+                            + " HttpOnly");
+
+                sendJson(
                     exchange,
                     200,
                     """
@@ -479,14 +713,26 @@ class IdukayAuthClientTest {
                       }
                     }
                     """);
-        });
+            });
 
-        server.createContext("/api/login/oauth", exchange -> {
-            oauthRequestBody.set(readBody(exchange));
+        server.createContext(
+            "/api/login/oauth",
+            exchange -> {
 
-            oauthCookie.set(exchange.getRequestHeaders().getFirst("Cookie"));
+                oauthRequestBody.set(
+                    readBody(exchange));
 
-            sendJson(
+                oauthCookie.set(
+                    header(
+                        exchange,
+                        "Cookie"));
+
+                oauthClientVersion.set(
+                    header(
+                        exchange,
+                        "ClientVersion"));
+
+                sendJson(
                     exchange,
                     200,
                     """
@@ -517,77 +763,135 @@ class IdukayAuthClientTest {
                       }
                     }
                     """);
-        });
+            });
 
         server.start();
 
-        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
-
-        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
-
-        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+        IdukayAuthClient client =
+            createClient(
+                mockedPasswordEncoder());
 
         IdukayLoginSession loginSession =
-                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), null);
+            client.startLogin(
+                "teacher@example.test",
+                "temporary-password".toCharArray(),
+                null);
 
-        IdukayOauthProfile profile = new IdukayOauthProfile("staff", "profile-test-001", "user-test-001");
+        IdukayOauthProfile profile =
+            new IdukayOauthProfile(
+                "staff",
+                "profile-test-001",
+                "user-test-001");
 
-        IdukayFingerprint fingerprint = syntheticFingerprint();
+        IdukayFingerprint fingerprint =
+            syntheticFingerprint();
 
-        IdukayAuthenticatedSession session = client.completeLogin(loginSession, profile, fingerprint);
+        IdukayAuthenticatedSession session =
+            client.completeLogin(
+                loginSession,
+                profile,
+                fingerprint);
 
-        String body = oauthRequestBody.get();
+        String body =
+            oauthRequestBody.get();
 
-        assertTrue(body.contains("\"attempt_id\":\"attempt-test-123\""));
+        assertTrue(
+            body.contains(
+                "\"attempt_id\":\"attempt-test-123\""));
 
-        assertTrue(body.contains("\"collection_name\":\"staff\""));
+        assertTrue(
+            body.contains(
+                "\"collection_name\":\"staff\""));
 
-        assertTrue(body.contains("\"_id\":\"profile-test-001\""));
+        assertTrue(
+            body.contains(
+                "\"_id\":\"profile-test-001\""));
 
-        assertTrue(body.contains("\"user\":\"user-test-001\""));
+        assertTrue(
+            body.contains(
+                "\"user\":\"user-test-001\""));
 
-        assertTrue(body.contains("\"user_agent\":\"Synthetic Browser\""));
+        assertTrue(
+            body.contains(
+                "\"user_agent\":\"Synthetic Browser\""));
 
-        assertTrue(oauthCookie.get().contains("login_token_test=" + "synthetic-session"));
+        assertTrue(
+            oauthCookie
+                .get()
+                .contains(
+                    "login_token_test="
+                        + "synthetic-session"));
 
-        HttpHeaders authorizationHeaders = new HttpHeaders();
+        assertEquals(
+            CLIENT_VERSION,
+            oauthClientVersion.get());
 
-        session.applyAuthorization(authorizationHeaders);
+        HttpHeaders authorizationHeaders =
+            new HttpHeaders();
 
-        assertEquals("synthetic-oauth-token", authorizationHeaders.getFirst(HttpHeaders.AUTHORIZATION));
+        session.applyAuthorization(
+            authorizationHeaders);
 
-        IdukaySessionContext context = session.context();
+        assertEquals(
+            "synthetic-oauth-token",
+            authorizationHeaders.getFirst(
+                HttpHeaders.AUTHORIZATION));
 
-        assertEquals("year-test-001", context.workingYear());
+        IdukaySessionContext context =
+            session.context();
 
-        assertEquals("school-test-001", context.workingSchool());
+        assertEquals(
+            "year-test-001",
+            context.workingYear());
 
-        assertEquals("organization-test-001", context.workingOrganization());
+        assertEquals(
+            "school-test-001",
+            context.workingSchool());
 
-        assertEquals("profile-test-001", context.workingProfile());
+        assertEquals(
+            "organization-test-001",
+            context.workingOrganization());
 
-        assertEquals("staff", context.profileType());
+        assertEquals(
+            "profile-test-001",
+            context.workingProfile());
 
-        assertEquals("-05:00", context.timeZone());
+        assertEquals(
+            "staff",
+            context.profileType());
 
-        assertEquals("growth_plans:manage;", context.acceptedPermissions());
+        assertEquals(
+            "-05:00",
+            context.timeZone());
 
-        assertFalse(session.toString().contains("synthetic-oauth-token"));
+        assertEquals(
+            "growth_plans:manage;",
+            context.acceptedPermissions());
 
-        assertTrue(session.toString().contains("[REDACTED]"));
+        assertFalse(
+            session.toString()
+                .contains(
+                    "synthetic-oauth-token"));
+
+        assertTrue(
+            session.toString()
+                .contains(
+                    "[REDACTED]"));
     }
 
     @Test
-    void completeLoginRejectsIdukayErrors() throws Exception {
+    void completeLoginRejectsIdukayErrors()
+        throws Exception {
 
         server = createServer();
 
         server.createContext(
-                "/api/login/web",
-                exchange -> sendJson(
-                        exchange,
-                        200,
-                        """
+            "/api/login/web",
+            exchange ->
+                sendJson(
+                    exchange,
+                    200,
+                    """
                     {
                       "errors": [],
                       "response": {
@@ -597,11 +901,12 @@ class IdukayAuthClientTest {
                     """));
 
         server.createContext(
-                "/api/login/oauth",
-                exchange -> sendJson(
-                        exchange,
-                        200,
-                        """
+            "/api/login/oauth",
+            exchange ->
+                sendJson(
+                    exchange,
+                    200,
+                    """
                     {
                       "errors": [
                         {
@@ -614,49 +919,115 @@ class IdukayAuthClientTest {
 
         server.start();
 
-        CryptoJsPasswordEncoder passwordEncoder = mock(CryptoJsPasswordEncoder.class);
-
-        when(passwordEncoder.encode(any(char[].class))).thenReturn("ENCODED_PASSWORD");
-
-        IdukayAuthClient client = new IdukayAuthClient(RestClient.builder(), passwordEncoder, baseUrl());
+        IdukayAuthClient client =
+            createClient(
+                mockedPasswordEncoder());
 
         IdukayLoginSession loginSession =
-                client.startLogin("teacher@example.test", "temporary-password".toCharArray(), null);
+            client.startLogin(
+                "teacher@example.test",
+                "temporary-password".toCharArray(),
+                null);
 
-        IdukayLoginException exception = assertThrows(
+        IdukayLoginException exception =
+            assertThrows(
                 IdukayLoginException.class,
-                () -> client.completeLogin(
+                () ->
+                    client.completeLogin(
                         loginSession,
-                        new IdukayOauthProfile("staff", "profile-test-001", "user-test-001"),
+                        new IdukayOauthProfile(
+                            "staff",
+                            "profile-test-001",
+                            "user-test-001"),
                         syntheticFingerprint()));
 
-        assertEquals("Idukay rejected the OAuth request", exception.getMessage());
+        assertEquals(
+            "Idukay rejected the OAuth request",
+            exception.getMessage());
     }
 
-    private HttpServer createServer() throws IOException {
+    private IdukayAuthClient createClient(
+        CryptoJsPasswordEncoder passwordEncoder) {
 
-        return HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        return new IdukayAuthClient(
+            RestClient.builder(),
+            passwordEncoder,
+            baseUrl(),
+            CLIENT_VERSION);
+    }
+
+    private static CryptoJsPasswordEncoder mockedPasswordEncoder() {
+
+        CryptoJsPasswordEncoder encoder =
+            mock(
+                CryptoJsPasswordEncoder.class);
+
+        when(encoder.encode(
+            any(char[].class)))
+            .thenReturn(
+                "ENCODED_PASSWORD");
+
+        return encoder;
+    }
+
+    private HttpServer createServer()
+        throws IOException {
+
+        return HttpServer.create(
+            new InetSocketAddress(
+                "127.0.0.1",
+                0),
+            0);
     }
 
     private String baseUrl() {
 
-        return "http://127.0.0.1:" + server.getAddress().getPort() + "/api/";
+        return "http://127.0.0.1:"
+            + server.getAddress()
+            .getPort()
+            + "/api/";
     }
 
-    private static String readBody(HttpExchange exchange) throws IOException {
+    private static String header(
+        HttpExchange exchange,
+        String name) {
 
-        return new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        return exchange
+            .getRequestHeaders()
+            .getFirst(name);
     }
 
-    private static void sendJson(HttpExchange exchange, int status, String json) throws IOException {
+    private static String readBody(
+        HttpExchange exchange)
+        throws IOException {
 
-        byte[] response = json.getBytes(StandardCharsets.UTF_8);
+        return new String(
+            exchange.getRequestBody()
+                .readAllBytes(),
+            StandardCharsets.UTF_8);
+    }
 
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
+    private static void sendJson(
+        HttpExchange exchange,
+        int status,
+        String json)
+        throws IOException {
 
-        exchange.sendResponseHeaders(status, response.length);
+        byte[] response =
+            json.getBytes(
+                StandardCharsets.UTF_8);
 
-        exchange.getResponseBody().write(response);
+        exchange.getResponseHeaders()
+            .add(
+                "Content-Type",
+                "application/json");
+
+        exchange.sendResponseHeaders(
+            status,
+            response.length);
+
+        exchange.getResponseBody()
+            .write(response);
 
         exchange.close();
     }
@@ -664,19 +1035,23 @@ class IdukayAuthClientTest {
     private IdukayFingerprint syntheticFingerprint() {
 
         return new IdukayFingerprint(
-                "Synthetic Browser",
+            "Synthetic Browser",
+            "es-EC",
+            List.of(
                 "es-EC",
-                List.of("es-EC", "es"),
-                "SyntheticPlatform",
-                8,
-                8.0,
-                Map.of(
-                        "width", 1920,
-                        "height", 1080),
-                "America/Guayaquil",
-                0,
-                "synthetic-canvas",
-                "synthetic-webgl",
-                "synthetic-audio");
+                "es"),
+            "SyntheticPlatform",
+            8,
+            8.0,
+            Map.of(
+                "width",
+                1920,
+                "height",
+                1080),
+            "America/Guayaquil",
+            0,
+            "synthetic-canvas",
+            "synthetic-webgl",
+            "synthetic-audio");
     }
 }

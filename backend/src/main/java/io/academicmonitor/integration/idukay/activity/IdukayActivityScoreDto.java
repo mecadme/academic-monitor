@@ -6,10 +6,7 @@ import java.math.BigDecimal;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record IdukayActivityScoreDto(
-    @JsonProperty("student")
-    String studentId,
-    BigDecimal score,
-    @JsonProperty("updated_at")
-    Long updatedAt,
-    @JsonProperty("created_at")
-    Long createdAt) {}
+        @JsonProperty("student") String studentId,
+        BigDecimal score,
+        @JsonProperty("updated_at") Long updatedAt,
+        @JsonProperty("created_at") Long createdAt) {}

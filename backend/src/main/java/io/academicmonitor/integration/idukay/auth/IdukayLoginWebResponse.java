@@ -1,12 +1,10 @@
 package io.academicmonitor.integration.idukay.auth;
 
-import java.util.List;
+import tools.jackson.databind.JsonNode;
 
-record IdukayLoginWebResponse(List<Object> errors, Response response) {
-
-    IdukayLoginWebResponse {
-        errors = errors == null ? List.of() : List.copyOf(errors);
-    }
+record IdukayLoginWebResponse(
+    JsonNode errors,
+    Response response) {
 
     record Response(String attempt_id) {}
 }
