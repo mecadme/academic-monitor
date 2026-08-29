@@ -203,6 +203,27 @@ class IdukayCourseActivitiesClientTest {
         assertNull(grade.recordedAt());
     }
 
+    @Test
+    void ignoresScoresWithoutNumericValue() {
+
+        IdukayActivityDto activity =
+            new IdukayActivityDto(
+                "activity-001",
+                "Actividad de prueba",
+                1_700_000_000L,
+                List.of(
+                    new IdukayActivityScoreDto(
+                        "student-001",
+                        null,
+                        null,
+                        null)));
+
+        PlatformActivitySnapshot snapshot =
+            IdukayActivityMapper.toSnapshot(activity);
+
+        assertTrue(snapshot.grades().isEmpty());
+    }
+
     private String baseUrl() {
 
         return "http://127.0.0.1:" + server.getAddress().getPort() + "/api/";

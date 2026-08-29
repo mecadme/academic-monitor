@@ -8,6 +8,8 @@ export type TestIdukayLoginInput = {
   subdomainSchool?: string
   schoolId?: string
   profileId?: string
+  institutionId: string
+  teacherUserId: string
 }
 
 export async function testIdukayLogin(
@@ -36,6 +38,10 @@ export async function testIdukayLogin(
           input.schoolId ?? null,
         profileId:
           input.profileId ?? null,
+        institutionId:
+        input.institutionId,
+        teacherUserId:
+        input.teacherUserId,
         fingerprint,
       }),
     },

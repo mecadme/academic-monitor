@@ -33,8 +33,9 @@ public final class IdukayActivityMapper {
         LocalDate activityDate = toLocalDate(activity.date());
 
         List<PlatformGradeSnapshot> grades = activity.scores().stream()
-                .map(IdukayActivityMapper::toGradeSnapshot)
-                .toList();
+            .filter(score -> score != null && score.score() != null)
+            .map(IdukayActivityMapper::toGradeSnapshot)
+            .toList();
 
         return new PlatformActivitySnapshot(externalId, name, TEMPORARY_MAXIMUM_SCORE, activityDate, grades);
     }
