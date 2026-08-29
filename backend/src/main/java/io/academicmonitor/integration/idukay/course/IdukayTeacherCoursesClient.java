@@ -13,7 +13,7 @@ public class IdukayTeacherCoursesClient {
 
     private static final String ENDPOINT = "teacher_courses";
 
-    private static final String SELECT = "name reference_name code subject students";
+    private static final String SELECT = "name reference_name code subject students custom_year";
 
     private static final String POPULATE =
             """

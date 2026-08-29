@@ -49,53 +49,55 @@ class IdukayTeacherCoursesClientTest {
             sendJson(
                     exchange,
                     """
-                    {
-                      "errors": [],
-                      "response": [
-                        {
-                          "_id": "course-test-001",
-                          "name": "1.º BGU A",
-                          "reference_name": "1 BGU A",
-                          "code": "1BGUA-FIS",
-                          "subject": {
-                            "_id": "subject-test-001",
-                            "name": "Física"
-                          },
-                          "students": [
                             {
-                              "_id": "student-test-001",
-                              "relational_data": {
-                                "name": {
-                                  "show": "PEREZ LOPEZ, ANA MARIA",
-                                  "order": "perez lopez, ana maria"
+                              "errors": [],
+                              "response": [
+                                {
+                                  "_id": "course-test-001",
+                                  "name": "1.º BGU A",
+                                  "reference_name": "1 BGU A",
+                                  "code": "1BGUA-FIS",
+                                  "custom_year": "custom-year-test-001",
+                                  "subject": {
+                                    "_id": "subject-test-001",
+                                    "name": "Física"
+                                  },
+                                  "students": [
+                                    {
+                                      "_id": "student-test-001",
+                                      "relational_data": {
+                                        "name": {
+                                          "show": "PEREZ LOPEZ, ANA MARIA",
+                                          "order": "perez lopez, ana maria"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "_id": "student-test-002",
+                                      "relational_data": {
+                                        "name": {
+                                          "show": "TORRES VEGA, LUIS",
+                                          "order": "torres vega, luis"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "_id": "course-test-002",
+                                  "name": "2.º BGU B",
+                                  "reference_name": "2 BGU B",
+                                  "code": "2BGUB-FIS",
+                                  "custom_year": "custom-year-test-001",
+                                  "subject": {
+                                    "_id": "subject-test-001",
+                                    "name": "Física"
+                                  },
+                                  "students": []
                                 }
-                              }
-                            },
-                            {
-                              "_id": "student-test-002",
-                              "relational_data": {
-                                "name": {
-                                  "show": "TORRES VEGA, LUIS",
-                                  "order": "torres vega, luis"
-                                }
-                              }
+                              ]
                             }
-                          ]
-                        },
-                        {
-                          "_id": "course-test-002",
-                          "name": "2.º BGU B",
-                          "reference_name": "2 BGU B",
-                          "code": "2BGUB-FIS",
-                          "subject": {
-                            "_id": "subject-test-001",
-                            "name": "Física"
-                          },
-                          "students": []
-                        }
-                      ]
-                    }
-                    """);
+                            """);
         });
 
         server.start();
@@ -113,7 +115,7 @@ class IdukayTeacherCoursesClientTest {
 
         List<IdukayTeacherCourseDto> courses = coursesClient.findTeacherCourses(session);
 
-        assertEquals("name reference_name code subject students", select.get());
+        assertEquals("name reference_name code subject students custom_year", select.get());
 
         assertEquals("{\"students\":\"relational_data\",\"subject\":\"name\"}", populate.get());
 
@@ -128,6 +130,8 @@ class IdukayTeacherCoursesClientTest {
         assertEquals("1 BGU A", first.referenceName());
 
         assertEquals("1BGUA-FIS", first.code());
+
+        assertEquals("custom-year-test-001", first.customYear());
 
         assertEquals("Física", first.subject().name());
 
@@ -169,6 +173,8 @@ class IdukayTeacherCoursesClientTest {
 
         IdukayTeacherCourseDto second = courses.get(1);
 
+        assertEquals("custom-year-test-001", second.customYear());
+
         assertTrue(second.students().isEmpty());
     }
 
@@ -181,6 +187,7 @@ class IdukayTeacherCoursesClientTest {
                 null,
                 null,
                 new IdukaySubjectDto("subject-test-001", "Física"),
+                null,
                 List.of(new IdukayStudentDto(
                         "student-test-001",
                         new IdukayStudentRelationalDataDto(new IdukayStudentNameDto("ANA MARIA PEREZ", null)))));

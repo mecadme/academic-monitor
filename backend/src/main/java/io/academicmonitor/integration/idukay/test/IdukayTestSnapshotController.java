@@ -1,11 +1,15 @@
 package io.academicmonitor.integration.idukay.test;
 
+import io.academicmonitor.academic.application.AcademicBatchSyncResult;
+import io.academicmonitor.academic.application.AcademicSyncService;
 import io.academicmonitor.academic.application.port.AcademicPlatformContext;
+import io.academicmonitor.academic.application.port.AcademicPlatformFilter;
 import io.academicmonitor.academic.application.port.AcademicPlatformSnapshot;
 import io.academicmonitor.integration.idukay.IdukayAcademicPlatformAdapter;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,12 +22,18 @@ import org.springframework.web.bind.annotation.RestController;
     havingValue = "true")
 public class IdukayTestSnapshotController {
 
+    private static final String PLATFORM_CODE =
+        "IDUKAY";
+
     private final IdukayAcademicPlatformAdapter adapter;
+    private final AcademicSyncService syncService;
 
     public IdukayTestSnapshotController(
-        IdukayAcademicPlatformAdapter adapter) {
+        IdukayAcademicPlatformAdapter adapter,
+        AcademicSyncService syncService) {
 
         this.adapter = adapter;
+        this.syncService = syncService;
     }
 
     @GetMapping("/test-snapshot")
@@ -37,25 +47,39 @@ public class IdukayTestSnapshotController {
                 teacherUserId);
 
         AcademicPlatformSnapshot snapshot =
-            adapter.fetchSnapshot(context);
+            adapter.fetchSnapshot(
+                context);
 
-        int courses = snapshot.courses().size();
+        int courses =
+            snapshot.courses()
+                .size();
 
-        int students = snapshot.courses()
-            .stream()
-            .mapToInt(course -> course.students().size())
-            .sum();
+        int students =
+            snapshot.courses()
+                .stream()
+                .mapToInt(course ->
+                    course.students()
+                        .size())
+                .sum();
 
-        int activities = snapshot.courses()
-            .stream()
-            .mapToInt(course -> course.activities().size())
-            .sum();
+        int activities =
+            snapshot.courses()
+                .stream()
+                .mapToInt(course ->
+                    course.activities()
+                        .size())
+                .sum();
 
-        int grades = snapshot.courses()
-            .stream()
-            .flatMap(course -> course.activities().stream())
-            .mapToInt(activity -> activity.grades().size())
-            .sum();
+        int grades =
+            snapshot.courses()
+                .stream()
+                .flatMap(course ->
+                    course.activities()
+                        .stream())
+                .mapToInt(activity ->
+                    activity.grades()
+                        .size())
+                .sum();
 
         return new TestSnapshotResponse(
             "OK",
@@ -65,10 +89,98 @@ public class IdukayTestSnapshotController {
             grades);
     }
 
+    @GetMapping("/test-filtered-snapshot")
+    public TestFilteredSnapshotResponse testFilteredSnapshot(
+        @RequestParam UUID institutionId,
+        @RequestParam UUID teacherUserId,
+        @RequestParam String periodExternalId) {
+
+        AcademicPlatformContext context =
+            new AcademicPlatformContext(
+                institutionId,
+                teacherUserId);
+
+        AcademicPlatformFilter filter =
+            new AcademicPlatformFilter(
+                periodExternalId);
+
+        AcademicPlatformSnapshot snapshot =
+            adapter.fetchSnapshot(
+                context,
+                filter);
+
+        int activities =
+            snapshot.courses()
+                .stream()
+                .mapToInt(course ->
+                    course.activities()
+                        .size())
+                .sum();
+
+        int grades =
+            snapshot.courses()
+                .stream()
+                .flatMap(course ->
+                    course.activities()
+                        .stream())
+                .mapToInt(activity ->
+                    activity.grades()
+                        .size())
+                .sum();
+
+        return new TestFilteredSnapshotResponse(
+            periodExternalId,
+            snapshot.courses().size(),
+            activities,
+            grades);
+    }
+
+    @PostMapping("/test-sync")
+    public TestBatchSyncResponse testSync(
+        @RequestParam UUID institutionId,
+        @RequestParam UUID teacherUserId,
+        @RequestParam String periodExternalId) {
+
+        AcademicPlatformFilter filter =
+            new AcademicPlatformFilter(
+                periodExternalId);
+
+        AcademicBatchSyncResult result =
+            syncService.synchronizeAll(
+                institutionId,
+                teacherUserId,
+                PLATFORM_CODE,
+                adapter,
+                filter);
+
+        return new TestBatchSyncResponse(
+            result.coursesProcessed(),
+            result.gradesProcessed(),
+            result.openAlerts(),
+            result.warnings(),
+            result.critical());
+    }
+
     public record TestSnapshotResponse(
         String status,
         int courses,
         int students,
         int activities,
-        int grades) {}
+        int grades) {
+    }
+
+    public record TestFilteredSnapshotResponse(
+        String periodExternalId,
+        int courses,
+        int activities,
+        int grades) {
+    }
+
+    public record TestBatchSyncResponse(
+        int coursesProcessed,
+        int gradesProcessed,
+        int openAlerts,
+        long warnings,
+        long critical) {
+    }
 }

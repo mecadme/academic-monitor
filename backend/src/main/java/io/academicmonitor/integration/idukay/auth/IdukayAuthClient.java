@@ -5,7 +5,6 @@ import java.net.CookiePolicy;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Arrays;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -24,22 +23,15 @@ public class IdukayAuthClient {
     private final String clientVersion;
 
     public IdukayAuthClient(
-        RestClient.Builder restClientBuilder,
-        CryptoJsPasswordEncoder passwordEncoder,
-        @Value(
-            "${app.idukay.base-url:"
-                + "https://idukay.net/colegios/api/}")
-        String baseUrl,
-        @Value("${app.idukay.client-version:12.0.2}")
-        String clientVersion) {
+            RestClient.Builder restClientBuilder,
+            CryptoJsPasswordEncoder passwordEncoder,
+            @Value("${app.idukay.base-url:" + "https://idukay.net/colegios/api/}") String baseUrl,
+            @Value("${app.idukay.client-version:12.0.2}") String clientVersion) {
 
         this.restClientBuilder = restClientBuilder;
         this.passwordEncoder = passwordEncoder;
         this.baseUrl = normalizeBaseUrl(baseUrl);
-        this.clientVersion =
-            requireText(
-                clientVersion,
-                "clientVersion");
+        this.clientVersion = requireText(clientVersion, "clientVersion");
     }
 
     public IdukayLoginSession startLogin(String email, char[] password, String subdomainSchool) {
@@ -63,25 +55,25 @@ public class IdukayAuthClient {
         }
 
         IdukayLoginWebRequest request =
-            new IdukayLoginWebRequest(normalizedEmail, encodedPassword, normalizeOptional(subdomainSchool));
+                new IdukayLoginWebRequest(normalizedEmail, encodedPassword, normalizeOptional(subdomainSchool));
 
         IdukayLoginWebResponse result;
 
         try {
             result = sessionClient
-                .post()
-                .uri("login/web")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(IdukayLoginWebResponse.class);
+                    .post()
+                    .uri("login/web")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(IdukayLoginWebResponse.class);
 
         } catch (RestClientResponseException exception) {
 
             throw new IdukayLoginException(
-                "Idukay login request failed with HTTP "
-                    + exception.getStatusCode().value(),
-                exception);
+                    "Idukay login request failed with HTTP "
+                            + exception.getStatusCode().value(),
+                    exception);
 
         } catch (RestClientException exception) {
 
@@ -93,13 +85,11 @@ public class IdukayAuthClient {
         }
 
         if (hasErrors(result.errors())) {
-            throw new IdukayLoginException(
-                "Idukay rejected the login request: "
-                    + summarizeErrors(result.errors()));
+            throw new IdukayLoginException("Idukay rejected the login request: " + summarizeErrors(result.errors()));
         }
         if (result.response() == null
-            || result.response().attempt_id() == null
-            || result.response().attempt_id().isBlank()) {
+                || result.response().attempt_id() == null
+                || result.response().attempt_id().isBlank()) {
 
             throw new IdukayLoginException("Idukay login response did not contain an attempt id");
         }
@@ -119,19 +109,19 @@ public class IdukayAuthClient {
 
         try {
             result = session.restClient()
-                .post()
-                .uri("login/contexts")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(IdukayLoginContextsResponse.class);
+                    .post()
+                    .uri("login/contexts")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(IdukayLoginContextsResponse.class);
 
         } catch (RestClientResponseException exception) {
 
             throw new IdukayLoginException(
-                "Idukay login contexts request failed with HTTP "
-                    + exception.getStatusCode().value(),
-                exception);
+                    "Idukay login contexts request failed with HTTP "
+                            + exception.getStatusCode().value(),
+                    exception);
 
         } catch (RestClientException exception) {
 
@@ -167,19 +157,19 @@ public class IdukayAuthClient {
 
         try {
             result = session.restClient()
-                .post()
-                .uri("login/profiles")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(IdukayLoginProfilesResponse.class);
+                    .post()
+                    .uri("login/profiles")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(IdukayLoginProfilesResponse.class);
 
         } catch (RestClientResponseException exception) {
 
             throw new IdukayLoginException(
-                "Idukay login profiles request failed with HTTP "
-                    + exception.getStatusCode().value(),
-                exception);
+                    "Idukay login profiles request failed with HTTP "
+                            + exception.getStatusCode().value(),
+                    exception);
 
         } catch (RestClientException exception) {
 
@@ -207,7 +197,7 @@ public class IdukayAuthClient {
     }
 
     public IdukayAuthenticatedSession completeLogin(
-        IdukayLoginSession session, IdukayOauthProfile profile, IdukayFingerprint fingerprint) {
+            IdukayLoginSession session, IdukayOauthProfile profile, IdukayFingerprint fingerprint) {
 
         if (session == null) {
             throw new IllegalArgumentException("session is required");
@@ -227,19 +217,19 @@ public class IdukayAuthClient {
 
         try {
             result = session.restClient()
-                .post()
-                .uri("login/oauth")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(IdukayOauthResponse.class);
+                    .post()
+                    .uri("login/oauth")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(IdukayOauthResponse.class);
 
         } catch (RestClientResponseException exception) {
 
             throw new IdukayLoginException(
-                "Idukay OAuth request failed with HTTP "
-                    + exception.getStatusCode().value(),
-                exception);
+                    "Idukay OAuth request failed with HTTP "
+                            + exception.getStatusCode().value(),
+                    exception);
 
         } catch (RestClientException exception) {
 
@@ -277,49 +267,43 @@ public class IdukayAuthClient {
         IdukayUserPreferences preferences = user.preferences();
 
         if (preferences.workingYear() == null
-            || isBlank(preferences.workingYear().id())) {
+                || isBlank(preferences.workingYear().id())) {
 
             throw new IdukayLoginException("Idukay session did not contain a working year");
         }
 
         if (preferences.workingSchool() == null
-            || isBlank(preferences.workingSchool().id())) {
+                || isBlank(preferences.workingSchool().id())) {
 
             throw new IdukayLoginException("Idukay session did not contain a working school");
         }
 
         if (preferences.workingProfile() == null
-            || isBlank(preferences.workingProfile().id())
-            || isBlank(preferences.workingProfile().collectionName())) {
+                || isBlank(preferences.workingProfile().id())
+                || isBlank(preferences.workingProfile().collectionName())) {
 
             throw new IdukayLoginException("Idukay session did not contain a working profile");
         }
 
         return new IdukaySessionContext(
-            preferences.workingYear().id(),
-            preferences.workingSchool().id(),
-            idOf(preferences.workingOrganization()),
-            idOf(preferences.selectedStudent()),
-            preferences.workingProfile().id(),
-            preferences.workingProfile().collectionName(),
-            preferences.timeZone(),
-            user.acceptedPermissions());
+                preferences.workingYear().id(),
+                preferences.workingSchool().id(),
+                idOf(preferences.workingOrganization()),
+                idOf(preferences.selectedStudent()),
+                preferences.workingProfile().id(),
+                preferences.workingProfile().collectionName(),
+                preferences.timeZone(),
+                user.acceptedPermissions());
     }
 
-    private void applyLoginHeaders(
-        org.springframework.http.HttpHeaders headers) {
+    private void applyLoginHeaders(org.springframework.http.HttpHeaders headers) {
 
-        headers.set(
-            "ClientVersion",
-            clientVersion);
+        headers.set("ClientVersion", clientVersion);
     }
 
-    private static String summarizeErrors(
-        JsonNode errors) {
+    private static String summarizeErrors(JsonNode errors) {
 
-        if (errors == null
-            || errors.isNull()
-            || errors.isMissingNode()) {
+        if (errors == null || errors.isNull() || errors.isMissingNode()) {
 
             return "unknown";
         }
@@ -327,31 +311,26 @@ public class IdukayAuthClient {
         if (errors.isArray()) {
 
             return errors.valueStream()
-                .map(error -> {
+                    .map(error -> {
+                        JsonNode code = error.get("code");
 
-                    JsonNode code =
-                        error.get("code");
+                        JsonNode message = error.get("message");
 
-                    JsonNode message =
-                        error.get("message");
+                        if (code != null && code.isTextual()) {
 
-                    if (code != null
-                        && code.isTextual()) {
+                            return code.asText();
+                        }
 
-                        return code.asText();
-                    }
+                        if (message != null && message.isTextual()) {
 
-                    if (message != null
-                        && message.isTextual()) {
+                            return message.asText();
+                        }
 
-                        return message.asText();
-                    }
-
-                    return "unknown_error";
-                })
-                .distinct()
-                .toList()
-                .toString();
+                        return "unknown_error";
+                    })
+                    .distinct()
+                    .toList()
+                    .toString();
         }
 
         return "unknown";
@@ -374,33 +353,24 @@ public class IdukayAuthClient {
 
     private RestClient createSessionClient() {
 
-        CookieManager cookieManager =
-            new CookieManager();
+        CookieManager cookieManager = new CookieManager();
 
-        cookieManager.setCookiePolicy(
-            CookiePolicy.ACCEPT_ALL);
+        cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
 
-        HttpClient httpClient =
-            HttpClient.newBuilder()
+        HttpClient httpClient = HttpClient.newBuilder()
                 .cookieHandler(cookieManager)
-                .connectTimeout(
-                    Duration.ofSeconds(15))
-                .followRedirects(
-                    HttpClient.Redirect.NORMAL)
+                .connectTimeout(Duration.ofSeconds(15))
+                .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
 
-        JdkClientHttpRequestFactory requestFactory =
-            new JdkClientHttpRequestFactory(
-                httpClient);
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
 
         return restClientBuilder
-            .clone()
-            .requestFactory(requestFactory)
-            .baseUrl(baseUrl)
-            .defaultHeader(
-                "ClientVersion",
-                clientVersion)
-            .build();
+                .clone()
+                .requestFactory(requestFactory)
+                .baseUrl(baseUrl)
+                .defaultHeader("ClientVersion", clientVersion)
+                .build();
     }
 
     private static boolean hasErrors(JsonNode errors) {

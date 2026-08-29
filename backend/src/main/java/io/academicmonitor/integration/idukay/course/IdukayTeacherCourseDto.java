@@ -11,6 +11,7 @@ public record IdukayTeacherCourseDto(
         @JsonProperty("reference_name") String referenceName,
         String code,
         IdukaySubjectDto subject,
+        @JsonProperty("custom_year") String customYear,
         List<IdukayStudentDto> students) {
 
     public IdukayTeacherCourseDto {

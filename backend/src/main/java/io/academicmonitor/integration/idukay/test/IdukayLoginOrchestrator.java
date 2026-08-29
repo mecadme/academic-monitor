@@ -1,29 +1,25 @@
 package io.academicmonitor.integration.idukay.test;
 
+import io.academicmonitor.academic.application.port.AcademicPlatformContext;
 import io.academicmonitor.integration.idukay.auth.*;
+import io.academicmonitor.integration.idukay.auth.InMemoryIdukaySessionProvider;
 import io.academicmonitor.integration.idukay.course.IdukayTeacherCourseDto;
 import io.academicmonitor.integration.idukay.course.IdukayTeacherCoursesClient;
-import io.academicmonitor.academic.application.port.AcademicPlatformContext;
-import io.academicmonitor.integration.idukay.auth.InMemoryIdukaySessionProvider;
-
 import java.util.Arrays;
 import java.util.List;
-
 import org.springframework.stereotype.Service;
 
 @Service
 public class IdukayLoginOrchestrator {
 
-
     private final InMemoryIdukaySessionProvider sessionProvider;
     private final IdukayAuthClient authClient;
     private final IdukayTeacherCoursesClient coursesClient;
 
-
     public IdukayLoginOrchestrator(
-        IdukayAuthClient authClient,
-        IdukayTeacherCoursesClient coursesClient,
-        InMemoryIdukaySessionProvider sessionProvider) {
+            IdukayAuthClient authClient,
+            IdukayTeacherCoursesClient coursesClient,
+            InMemoryIdukaySessionProvider sessionProvider) {
 
         this.authClient = authClient;
         this.coursesClient = coursesClient;
@@ -38,12 +34,12 @@ public class IdukayLoginOrchestrator {
 
         try {
             IdukayLoginSession loginSession =
-                authClient.startLogin(request.email(), workingPassword, request.subdomainSchool());
+                    authClient.startLogin(request.email(), workingPassword, request.subdomainSchool());
 
             IdukayLoginContexts contexts = authClient.getAvailableContexts(loginSession);
 
             ProfileSelection selection =
-                resolveProfile(loginSession, contexts, request.schoolId(), request.profileId());
+                    resolveProfile(loginSession, contexts, request.schoolId(), request.profileId());
 
             if (selection == null) {
                 return selectionRequired(loginSession, contexts, request.schoolId());
@@ -52,21 +48,17 @@ public class IdukayLoginOrchestrator {
             IdukayOauthProfile oauthProfile = IdukayOauthProfile.from(selection.profile(), selection.userId());
 
             IdukayAuthenticatedSession authenticatedSession =
-                authClient.completeLogin(loginSession, oauthProfile, request.fingerprint());
+                    authClient.completeLogin(loginSession, oauthProfile, request.fingerprint());
 
             AcademicPlatformContext platformContext =
-                new AcademicPlatformContext(
-                    request.institutionId(),
-                    request.teacherUserId());
+                    new AcademicPlatformContext(request.institutionId(), request.teacherUserId());
 
-            sessionProvider.storeSession(
-                platformContext,
-                authenticatedSession);
+            sessionProvider.storeSession(platformContext, authenticatedSession);
 
             List<IdukayTeacherCourseDto> courses = coursesClient.findTeacherCourses(authenticatedSession);
 
             return IdukayTestLoginResponse.authenticated(
-                authenticatedSession.context().profileType(), courses.size());
+                    authenticatedSession.context().profileType(), courses.size());
 
         } finally {
             Arrays.fill(workingPassword, '\0');
@@ -76,14 +68,14 @@ public class IdukayLoginOrchestrator {
     }
 
     private ProfileSelection resolveProfile(
-        IdukayLoginSession loginSession,
-        IdukayLoginContexts contexts,
-        String requestedSchoolId,
-        String requestedProfileId) {
+            IdukayLoginSession loginSession,
+            IdukayLoginContexts contexts,
+            String requestedSchoolId,
+            String requestedProfileId) {
 
         String contextUserId = contexts.user() != null && contexts.user().isTextual()
-            ? contexts.user().asText()
-            : null;
+                ? contexts.user().asText()
+                : null;
 
         if (!contexts.profiles().isEmpty() && contextUserId != null) {
 
@@ -111,24 +103,24 @@ public class IdukayLoginOrchestrator {
     }
 
     private IdukayTestLoginResponse selectionRequired(
-        IdukayLoginSession loginSession, IdukayLoginContexts contexts, String requestedSchoolId) {
+            IdukayLoginSession loginSession, IdukayLoginContexts contexts, String requestedSchoolId) {
 
         List<IdukayTestLoginResponse.SchoolOption> schools = contexts.schools().stream()
-            .map(school -> new IdukayTestLoginResponse.SchoolOption(school.id(), school.name()))
-            .toList();
+                .map(school -> new IdukayTestLoginResponse.SchoolOption(school.id(), school.name()))
+                .toList();
 
         List<IdukayLoginProfile> availableProfiles = contexts.profiles();
 
         if (availableProfiles.isEmpty() && requestedSchoolId != null && !requestedSchoolId.isBlank()) {
 
             availableProfiles = authClient
-                .getProfilesBySchool(loginSession, requestedSchoolId)
-                .profiles();
+                    .getProfilesBySchool(loginSession, requestedSchoolId)
+                    .profiles();
         }
 
         List<IdukayTestLoginResponse.ProfileOption> profiles = availableProfiles.stream()
-            .map(profile -> new IdukayTestLoginResponse.ProfileOption(profile.id(), profile.collectionName()))
-            .toList();
+                .map(profile -> new IdukayTestLoginResponse.ProfileOption(profile.id(), profile.collectionName()))
+                .toList();
 
         return IdukayTestLoginResponse.selectionRequired(schools, profiles);
     }
@@ -138,14 +130,14 @@ public class IdukayLoginOrchestrator {
         if (requestedProfileId != null && !requestedProfileId.isBlank()) {
 
             return profiles.stream()
-                .filter(profile -> requestedProfileId.equals(profile.id()))
-                .findFirst()
-                .orElse(null);
+                    .filter(profile -> requestedProfileId.equals(profile.id()))
+                    .findFirst()
+                    .orElse(null);
         }
 
         List<IdukayLoginProfile> staffProfiles = profiles.stream()
-            .filter(profile -> "staff".equals(profile.collectionName()))
-            .toList();
+                .filter(profile -> "staff".equals(profile.collectionName()))
+                .toList();
 
         if (staffProfiles.size() == 1) {
             return staffProfiles.getFirst();
@@ -179,6 +171,5 @@ public class IdukayLoginOrchestrator {
         }
     }
 
-    private record ProfileSelection(String userId, IdukayLoginProfile profile) {
-    }
+    private record ProfileSelection(String userId, IdukayLoginProfile profile) {}
 }

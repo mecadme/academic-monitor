@@ -4,6 +4,5 @@ import io.academicmonitor.academic.application.port.AcademicPlatformContext;
 
 public interface IdukaySessionProvider {
 
-    IdukayAuthenticatedSession getSession(
-        AcademicPlatformContext context);
+    IdukayAuthenticatedSession getSession(AcademicPlatformContext context);
 }

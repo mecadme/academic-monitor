@@ -8,40 +8,30 @@ import org.springframework.stereotype.Component;
 @Component
 public class InMemoryIdukaySessionProvider implements IdukaySessionProvider {
 
-    private final Map<AcademicPlatformContext, IdukayAuthenticatedSession> sessions =
-        new ConcurrentHashMap<>();
+    private final Map<AcademicPlatformContext, IdukayAuthenticatedSession> sessions = new ConcurrentHashMap<>();
 
     @Override
-    public IdukayAuthenticatedSession getSession(
-        AcademicPlatformContext context) {
+    public IdukayAuthenticatedSession getSession(AcademicPlatformContext context) {
 
-        IdukayAuthenticatedSession session =
-            sessions.get(context);
+        IdukayAuthenticatedSession session = sessions.get(context);
 
         if (session == null) {
-            throw new IllegalStateException(
-                "No authenticated Idukay session is available for the requested context");
+            throw new IllegalStateException("No authenticated Idukay session is available for the requested context");
         }
 
         return session;
     }
 
-    public void storeSession(
-        AcademicPlatformContext context,
-        IdukayAuthenticatedSession session) {
+    public void storeSession(AcademicPlatformContext context, IdukayAuthenticatedSession session) {
 
         if (context == null) {
-            throw new IllegalArgumentException(
-                "context is required");
+            throw new IllegalArgumentException("context is required");
         }
 
         if (session == null) {
-            throw new IllegalArgumentException(
-                "session is required");
+            throw new IllegalArgumentException("session is required");
         }
 
-        sessions.put(
-            context,
-            session);
+        sessions.put(context, session);
     }
 }
