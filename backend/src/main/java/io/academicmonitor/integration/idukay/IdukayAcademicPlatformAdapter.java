@@ -19,8 +19,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
-public class IdukayAcademicPlatformAdapter
-    implements AcademicPlatformPort {
+public class IdukayAcademicPlatformAdapter implements AcademicPlatformPort {
 
     private final IdukaySessionProvider sessionProvider;
     private final IdukayTeacherCoursesClient coursesClient;
@@ -28,10 +27,10 @@ public class IdukayAcademicPlatformAdapter
     private final IdukayCoursePeriodClient coursePeriodClient;
 
     public IdukayAcademicPlatformAdapter(
-        IdukaySessionProvider sessionProvider,
-        IdukayTeacherCoursesClient coursesClient,
-        IdukayCourseActivitiesClient activitiesClient,
-        IdukayCoursePeriodClient coursePeriodClient) {
+            IdukaySessionProvider sessionProvider,
+            IdukayTeacherCoursesClient coursesClient,
+            IdukayCourseActivitiesClient activitiesClient,
+            IdukayCoursePeriodClient coursePeriodClient) {
 
         this.sessionProvider = sessionProvider;
         this.coursesClient = coursesClient;
@@ -40,88 +39,47 @@ public class IdukayAcademicPlatformAdapter
     }
 
     @Override
-    public AcademicPlatformSnapshot fetchSnapshot(
-        AcademicPlatformContext context) {
+    public AcademicPlatformSnapshot fetchSnapshot(AcademicPlatformContext context) {
 
-        return fetchSnapshot(
-            context,
-            AcademicPlatformFilter.all());
+        return fetchSnapshot(context, AcademicPlatformFilter.all());
     }
 
     @Override
-    public AcademicPlatformSnapshot fetchSnapshot(
-        AcademicPlatformContext context,
-        AcademicPlatformFilter filter) {
+    public AcademicPlatformSnapshot fetchSnapshot(AcademicPlatformContext context, AcademicPlatformFilter filter) {
 
-        IdukayAuthenticatedSession session =
-            sessionProvider.getSession(context);
+        IdukayAuthenticatedSession session = sessionProvider.getSession(context);
 
-        AcademicPlatformFilter effectiveFilter =
-            filter == null
-                ? AcademicPlatformFilter.all()
-                : filter;
+        AcademicPlatformFilter effectiveFilter = filter == null ? AcademicPlatformFilter.all() : filter;
 
-        List<PlatformCourseSnapshot> courses =
-            coursesClient.findTeacherCourses(session)
-                .stream()
-                .map(course ->
-                    mapCourse(
-                        session,
-                        course,
-                        effectiveFilter))
+        List<PlatformCourseSnapshot> courses = coursesClient.findTeacherCourses(session).stream()
+                .map(course -> mapCourse(session, course, effectiveFilter))
                 .toList();
 
         return new AcademicPlatformSnapshot(courses);
     }
 
     private PlatformCourseSnapshot mapCourse(
-        IdukayAuthenticatedSession session,
-        IdukayTeacherCourseDto course,
-        AcademicPlatformFilter filter) {
+            IdukayAuthenticatedSession session, IdukayTeacherCourseDto course, AcademicPlatformFilter filter) {
 
-        PlatformCourseSnapshot base =
-            IdukayCourseMapper.toSnapshot(
-                course);
+        PlatformCourseSnapshot base = IdukayCourseMapper.toSnapshot(course);
 
-        var customYear =
-            coursePeriodClient.findCustomYear(
-                session,
-                course.id());
+        var customYear = coursePeriodClient.findCustomYear(session, course.id());
 
-        var idukayActivities =
-            activitiesClient.findActivities(
-                session,
-                course.id());
+        var idukayActivities = activitiesClient.findActivities(session, course.id());
 
         if (filter.hasPeriod()) {
 
-            idukayActivities =
-                idukayActivities.stream()
-                    .filter(activity ->
-                        IdukayPeriodResolver
-                            .findTermByPartId(
-                                customYear,
-                                activity.partId())
-                            .map(term ->
-                                filter.periodExternalId()
-                                    .equals(term.id()))
+            idukayActivities = idukayActivities.stream()
+                    .filter(activity -> IdukayPeriodResolver.findTermByPartId(customYear, activity.partId())
+                            .map(term -> filter.periodExternalId().equals(term.id()))
                             .orElse(false))
                     .toList();
         }
 
-        List<PlatformActivitySnapshot> activities =
-            idukayActivities.stream()
-                .map(activity ->
-                    IdukayActivityMapper.toSnapshot(
-                        activity,
-                        customYear.baseScore()))
+        List<PlatformActivitySnapshot> activities = idukayActivities.stream()
+                .map(activity -> IdukayActivityMapper.toSnapshot(activity, customYear.baseScore()))
                 .toList();
 
-        return new PlatformCourseSnapshot(
-            base.externalId(),
-            base.name(),
-            base.subject(),
-            activities,
-            base.students());
+        return new PlatformCourseSnapshot(base.externalId(), base.name(), base.subject(), activities, base.students());
     }
 }

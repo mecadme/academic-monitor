@@ -13,132 +13,84 @@ public final class IdukayActivityMapper {
 
     private IdukayActivityMapper() {}
 
-    public static PlatformActivitySnapshot toSnapshot(
-        IdukayActivityDto activity,
-        BigDecimal maximumScore) {
+    public static PlatformActivitySnapshot toSnapshot(IdukayActivityDto activity, BigDecimal maximumScore) {
 
         if (activity == null) {
-            throw new IllegalArgumentException(
-                "activity is required");
+            throw new IllegalArgumentException("activity is required");
         }
 
         if (maximumScore == null) {
-            throw new IdukayApiException(
-                "Idukay custom year did not contain base_score");
+            throw new IdukayApiException("Idukay custom year did not contain base_score");
         }
 
         if (maximumScore.signum() <= 0) {
-            throw new IdukayApiException(
-                "Idukay base_score must be greater than zero");
+            throw new IdukayApiException("Idukay base_score must be greater than zero");
         }
 
-        String externalId =
-            requireText(
-                activity.id(),
-                "activity._id");
+        String externalId = requireText(activity.id(), "activity._id");
 
-        String name =
-            requireText(
-                activity.name(),
-                "activity.name");
+        String name = requireText(activity.name(), "activity.name");
 
-        LocalDate activityDate =
-            toLocalDate(
-                activity.date());
+        LocalDate activityDate = toLocalDate(activity.date());
 
-        List<PlatformGradeSnapshot> grades =
-            activity.scores()
-                .stream()
-                .filter(score ->
-                    score != null
-                        && score.score() != null)
+        List<PlatformGradeSnapshot> grades = activity.scores().stream()
+                .filter(score -> score != null && score.score() != null)
                 .map(IdukayActivityMapper::toGradeSnapshot)
                 .toList();
 
-        return new PlatformActivitySnapshot(
-            externalId,
-            name,
-            maximumScore,
-            activityDate,
-            grades);
+        return new PlatformActivitySnapshot(externalId, name, maximumScore, activityDate, grades);
     }
 
-    private static PlatformGradeSnapshot toGradeSnapshot(
-        IdukayActivityScoreDto score) {
+    private static PlatformGradeSnapshot toGradeSnapshot(IdukayActivityScoreDto score) {
 
         if (score == null) {
-            throw new IdukayApiException(
-                "Idukay activity contained an empty score");
+            throw new IdukayApiException("Idukay activity contained an empty score");
         }
 
-        String studentExternalId =
-            requireText(
-                score.studentId(),
-                "score.student");
+        String studentExternalId = requireText(score.studentId(), "score.student");
 
         if (score.score() == null) {
-            throw new IdukayApiException(
-                "Idukay score did not contain a numeric value");
+            throw new IdukayApiException("Idukay score did not contain a numeric value");
         }
 
-        Instant recordedAt =
-            resolveRecordedAt(
-                score);
+        Instant recordedAt = resolveRecordedAt(score);
 
-        return new PlatformGradeSnapshot(
-            studentExternalId,
-            score.score(),
-            recordedAt);
+        return new PlatformGradeSnapshot(studentExternalId, score.score(), recordedAt);
     }
 
-    private static Instant resolveRecordedAt(
-        IdukayActivityScoreDto score) {
+    private static Instant resolveRecordedAt(IdukayActivityScoreDto score) {
 
-        Long timestamp =
-            score.updatedAt() != null
-                ? score.updatedAt()
-                : score.createdAt();
+        Long timestamp = score.updatedAt() != null ? score.updatedAt() : score.createdAt();
 
         if (timestamp == null) {
             return null;
         }
 
         if (timestamp < 0) {
-            throw new IdukayApiException(
-                "Idukay score timestamp cannot be negative");
+            throw new IdukayApiException("Idukay score timestamp cannot be negative");
         }
 
-        return Instant.ofEpochSecond(
-            timestamp);
+        return Instant.ofEpochSecond(timestamp);
     }
 
-    private static LocalDate toLocalDate(
-        Long epochSeconds) {
+    private static LocalDate toLocalDate(Long epochSeconds) {
 
         if (epochSeconds == null) {
             return null;
         }
 
         if (epochSeconds < 0) {
-            throw new IdukayApiException(
-                "Idukay activity date cannot be negative");
+            throw new IdukayApiException("Idukay activity date cannot be negative");
         }
 
-        return Instant.ofEpochSecond(epochSeconds)
-            .atZone(ZoneOffset.UTC)
-            .toLocalDate();
+        return Instant.ofEpochSecond(epochSeconds).atZone(ZoneOffset.UTC).toLocalDate();
     }
 
-    private static String requireText(
-        String value,
-        String field) {
+    private static String requireText(String value, String field) {
 
-        if (value == null
-            || value.isBlank()) {
+        if (value == null || value.isBlank()) {
 
-            throw new IdukayApiException(
-                "Idukay response did not contain "
-                    + field);
+            throw new IdukayApiException("Idukay response did not contain " + field);
         }
 
         return value.trim();

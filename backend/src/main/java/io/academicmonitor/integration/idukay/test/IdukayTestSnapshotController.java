@@ -23,10 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/integrations/idukay")
-@ConditionalOnProperty(
-    prefix = "app.idukay",
-    name = "test-login-enabled",
-    havingValue = "true")
+@ConditionalOnProperty(prefix = "app.idukay", name = "test-login-enabled", havingValue = "true")
 public class IdukayTestSnapshotController {
 
     private static final String PLATFORM_CODE = "IDUKAY";
@@ -38,11 +35,11 @@ public class IdukayTestSnapshotController {
     private final IdukayCoursePeriodClient coursePeriodClient;
 
     public IdukayTestSnapshotController(
-        IdukayAcademicPlatformAdapter adapter,
-        AcademicSyncService syncService,
-        IdukaySessionProvider sessionProvider,
-        IdukayTeacherCoursesClient teacherCoursesClient,
-        IdukayCoursePeriodClient coursePeriodClient) {
+            IdukayAcademicPlatformAdapter adapter,
+            AcademicSyncService syncService,
+            IdukaySessionProvider sessionProvider,
+            IdukayTeacherCoursesClient teacherCoursesClient,
+            IdukayCoursePeriodClient coursePeriodClient) {
 
         this.adapter = adapter;
         this.syncService = syncService;
@@ -52,204 +49,105 @@ public class IdukayTestSnapshotController {
     }
 
     @GetMapping("/test-periods")
-    public TestPeriodsResponse testPeriods(
-        @RequestParam UUID institutionId,
-        @RequestParam UUID teacherUserId) {
+    public TestPeriodsResponse testPeriods(@RequestParam UUID institutionId, @RequestParam UUID teacherUserId) {
 
-        AcademicPlatformContext context =
-            new AcademicPlatformContext(
-                institutionId,
-                teacherUserId);
+        AcademicPlatformContext context = new AcademicPlatformContext(institutionId, teacherUserId);
 
-        IdukayAuthenticatedSession session =
-            sessionProvider.getSession(context);
+        IdukayAuthenticatedSession session = sessionProvider.getSession(context);
 
-        List<IdukayTeacherCourseDto> courses =
-            teacherCoursesClient.findTeacherCourses(session);
+        List<IdukayTeacherCourseDto> courses = teacherCoursesClient.findTeacherCourses(session);
 
         if (courses.isEmpty()) {
-            throw new IllegalStateException(
-                "No Idukay teacher courses are available");
+            throw new IllegalStateException("No Idukay teacher courses are available");
         }
 
         IdukayCustomYearDto customYear =
-            coursePeriodClient.findCustomYear(
-                session,
-                courses.get(0).id());
+                coursePeriodClient.findCustomYear(session, courses.get(0).id());
 
-        List<TestPeriodResponse> periods =
-            customYear.terms().stream()
-                .map(term ->
-                    new TestPeriodResponse(
-                        term.id(),
-                        term.name(),
-                        term.abbreviation()))
+        List<TestPeriodResponse> periods = customYear.terms().stream()
+                .map(term -> new TestPeriodResponse(term.id(), term.name(), term.abbreviation()))
                 .toList();
 
-        return new TestPeriodsResponse(
-            customYear.id(),
-            customYear.name(),
-            customYear.baseScore(),
-            periods);
+        return new TestPeriodsResponse(customYear.id(), customYear.name(), customYear.baseScore(), periods);
     }
 
     @GetMapping("/test-snapshot")
-    public TestSnapshotResponse testSnapshot(
-        @RequestParam UUID institutionId,
-        @RequestParam UUID teacherUserId) {
+    public TestSnapshotResponse testSnapshot(@RequestParam UUID institutionId, @RequestParam UUID teacherUserId) {
 
-        AcademicPlatformContext context =
-            new AcademicPlatformContext(
-                institutionId,
-                teacherUserId);
+        AcademicPlatformContext context = new AcademicPlatformContext(institutionId, teacherUserId);
 
-        AcademicPlatformSnapshot snapshot =
-            adapter.fetchSnapshot(context);
+        AcademicPlatformSnapshot snapshot = adapter.fetchSnapshot(context);
 
-        int courses =
-            snapshot.courses()
-                .size();
+        int courses = snapshot.courses().size();
 
-        int students =
-            snapshot.courses()
-                .stream()
-                .mapToInt(course ->
-                    course.students()
-                        .size())
+        int students = snapshot.courses().stream()
+                .mapToInt(course -> course.students().size())
                 .sum();
 
-        int activities =
-            snapshot.courses()
-                .stream()
-                .mapToInt(course ->
-                    course.activities()
-                        .size())
+        int activities = snapshot.courses().stream()
+                .mapToInt(course -> course.activities().size())
                 .sum();
 
-        int grades =
-            snapshot.courses()
-                .stream()
-                .flatMap(course ->
-                    course.activities()
-                        .stream())
-                .mapToInt(activity ->
-                    activity.grades()
-                        .size())
+        int grades = snapshot.courses().stream()
+                .flatMap(course -> course.activities().stream())
+                .mapToInt(activity -> activity.grades().size())
                 .sum();
 
-        return new TestSnapshotResponse(
-            "OK",
-            courses,
-            students,
-            activities,
-            grades);
+        return new TestSnapshotResponse("OK", courses, students, activities, grades);
     }
 
     @GetMapping("/test-filtered-snapshot")
     public TestFilteredSnapshotResponse testFilteredSnapshot(
-        @RequestParam UUID institutionId,
-        @RequestParam UUID teacherUserId,
-        @RequestParam String periodExternalId) {
+            @RequestParam UUID institutionId, @RequestParam UUID teacherUserId, @RequestParam String periodExternalId) {
 
-        AcademicPlatformContext context =
-            new AcademicPlatformContext(
-                institutionId,
-                teacherUserId);
+        AcademicPlatformContext context = new AcademicPlatformContext(institutionId, teacherUserId);
 
-        AcademicPlatformFilter filter =
-            new AcademicPlatformFilter(
-                periodExternalId);
+        AcademicPlatformFilter filter = new AcademicPlatformFilter(periodExternalId);
 
-        AcademicPlatformSnapshot snapshot =
-            adapter.fetchSnapshot(
-                context,
-                filter);
+        AcademicPlatformSnapshot snapshot = adapter.fetchSnapshot(context, filter);
 
-        int activities =
-            snapshot.courses()
-                .stream()
-                .mapToInt(course ->
-                    course.activities()
-                        .size())
+        int activities = snapshot.courses().stream()
+                .mapToInt(course -> course.activities().size())
                 .sum();
 
-        int grades =
-            snapshot.courses()
-                .stream()
-                .flatMap(course ->
-                    course.activities()
-                        .stream())
-                .mapToInt(activity ->
-                    activity.grades()
-                        .size())
+        int grades = snapshot.courses().stream()
+                .flatMap(course -> course.activities().stream())
+                .mapToInt(activity -> activity.grades().size())
                 .sum();
 
         return new TestFilteredSnapshotResponse(
-            periodExternalId,
-            snapshot.courses().size(),
-            activities,
-            grades);
+                periodExternalId, snapshot.courses().size(), activities, grades);
     }
 
     @PostMapping("/test-sync")
     public TestBatchSyncResponse testSync(
-        @RequestParam UUID institutionId,
-        @RequestParam UUID teacherUserId,
-        @RequestParam String periodExternalId) {
+            @RequestParam UUID institutionId, @RequestParam UUID teacherUserId, @RequestParam String periodExternalId) {
 
-        AcademicPlatformFilter filter =
-            new AcademicPlatformFilter(
-                periodExternalId);
+        AcademicPlatformFilter filter = new AcademicPlatformFilter(periodExternalId);
 
         AcademicBatchSyncResult result =
-            syncService.synchronizeAll(
-                institutionId,
-                teacherUserId,
-                PLATFORM_CODE,
-                adapter,
-                filter);
+                syncService.synchronizeAll(institutionId, teacherUserId, PLATFORM_CODE, adapter, filter);
 
         return new TestBatchSyncResponse(
-            result.coursesProcessed(),
-            result.gradesProcessed(),
-            result.openAlerts(),
-            result.warnings(),
-            result.critical());
+                result.coursesProcessed(),
+                result.gradesProcessed(),
+                result.openAlerts(),
+                result.warnings(),
+                result.critical());
     }
 
     public record TestPeriodsResponse(
-        String academicYearId,
-        String academicYear,
-        java.math.BigDecimal baseScore,
-        List<TestPeriodResponse> periods) {
-    }
+            String academicYearId,
+            String academicYear,
+            java.math.BigDecimal baseScore,
+            List<TestPeriodResponse> periods) {}
 
-    public record TestPeriodResponse(
-        String id,
-        String name,
-        String abbreviation) {
-    }
+    public record TestPeriodResponse(String id, String name, String abbreviation) {}
 
-    public record TestSnapshotResponse(
-        String status,
-        int courses,
-        int students,
-        int activities,
-        int grades) {
-    }
+    public record TestSnapshotResponse(String status, int courses, int students, int activities, int grades) {}
 
-    public record TestFilteredSnapshotResponse(
-        String periodExternalId,
-        int courses,
-        int activities,
-        int grades) {
-    }
+    public record TestFilteredSnapshotResponse(String periodExternalId, int courses, int activities, int grades) {}
 
     public record TestBatchSyncResponse(
-        int coursesProcessed,
-        int gradesProcessed,
-        int openAlerts,
-        long warnings,
-        long critical) {
-    }
+            int coursesProcessed, int gradesProcessed, int openAlerts, long warnings, long critical) {}
 }

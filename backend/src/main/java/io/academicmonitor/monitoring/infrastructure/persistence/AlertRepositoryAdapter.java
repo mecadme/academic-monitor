@@ -10,13 +10,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
 @Repository
-class AlertRepositoryAdapter
-    implements AlertRepository {
+class AlertRepositoryAdapter implements AlertRepository {
 
     private final AlertDataRepository repository;
 
-    AlertRepositoryAdapter(
-        AlertDataRepository repository) {
+    AlertRepositoryAdapter(AlertDataRepository repository) {
 
         this.repository = repository;
     }
@@ -27,42 +25,22 @@ class AlertRepositoryAdapter
     }
 
     @Override
-    public Optional<Alert>
-    findByActivityIdAndStudentIdAndRuleCodeAndStatus(
-        UUID activityId,
-        UUID studentId,
-        String ruleCode,
-        AlertStatus status) {
+    public Optional<Alert> findByActivityIdAndStudentIdAndRuleCodeAndStatus(
+            UUID activityId, UUID studentId, String ruleCode, AlertStatus status) {
 
-        return repository
-            .findByActivityIdAndStudentIdAndRuleCodeAndStatus(
-                activityId,
-                studentId,
-                ruleCode,
-                status);
+        return repository.findByActivityIdAndStudentIdAndRuleCodeAndStatus(activityId, studentId, ruleCode, status);
     }
 
     @Override
-    public List<Alert> findByCourseIdAndStatus(
-        UUID courseId,
-        AlertStatus status) {
+    public List<Alert> findByCourseIdAndStatus(UUID courseId, AlertStatus status) {
 
-        return repository.findByCourseIdAndStatus(
-            courseId,
-            status);
+        return repository.findByCourseIdAndStatus(courseId, status);
     }
 
     @Override
-    public List<Alert>
-    findByCourseIdAndStatusAndActivityIdIn(
-        UUID courseId,
-        AlertStatus status,
-        Collection<UUID> activityIds) {
+    public List<Alert> findByCourseIdAndStatusAndActivityIdIn(
+            UUID courseId, AlertStatus status, Collection<UUID> activityIds) {
 
-        return repository
-            .findByCourseIdAndStatusAndActivityIdIn(
-                courseId,
-                status,
-                activityIds);
+        return repository.findByCourseIdAndStatusAndActivityIdIn(courseId, status, activityIds);
     }
 }

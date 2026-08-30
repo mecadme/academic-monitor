@@ -6,14 +6,9 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record IdukayTermDto(
-    @JsonProperty("_id") String id,
-    String name,
-    String abbreviation,
-    List<IdukayPartDto> parts) {
+        @JsonProperty("_id") String id, String name, String abbreviation, List<IdukayPartDto> parts) {
 
     public IdukayTermDto {
-        parts = parts == null
-            ? List.of()
-            : List.copyOf(parts);
+        parts = parts == null ? List.of() : List.copyOf(parts);
     }
 }

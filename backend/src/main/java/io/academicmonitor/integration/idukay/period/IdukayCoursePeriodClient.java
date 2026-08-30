@@ -3,17 +3,14 @@ package io.academicmonitor.integration.idukay.period;
 import io.academicmonitor.integration.idukay.auth.IdukayAuthenticatedSession;
 import io.academicmonitor.integration.idukay.client.IdukayApiClient;
 import io.academicmonitor.integration.idukay.client.IdukayApiException;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
-
-import java.util.Map;
 
 @Component
 public class IdukayCoursePeriodClient {
 
-    private static final String ENDPOINT =
-        "custom_year_course";
-
+    private static final String ENDPOINT = "custom_year_course";
 
     private final IdukayApiClient apiClient;
 
@@ -22,40 +19,25 @@ public class IdukayCoursePeriodClient {
         this.apiClient = apiClient;
     }
 
-    public IdukayCustomYearDto findCustomYear(
-        IdukayAuthenticatedSession session,
-        String courseExternalId) {
+    public IdukayCustomYearDto findCustomYear(IdukayAuthenticatedSession session, String courseExternalId) {
 
-        String courseId =
-            requireText(
-                courseExternalId,
-                "courseExternalId");
+        String courseId = requireText(courseExternalId, "courseExternalId");
 
         IdukayCoursePeriodResponse result =
-            apiClient.get(
-                session,
-                ENDPOINT,
-                Map.of(
-                    "_id",
-                    courseId),
-                IdukayCoursePeriodResponse.class);
+                apiClient.get(session, ENDPOINT, Map.of("_id", courseId), IdukayCoursePeriodResponse.class);
 
         if (result == null) {
-            throw new IdukayApiException(
-                "Idukay returned an empty course period response");
+            throw new IdukayApiException("Idukay returned an empty course period response");
         }
 
         if (hasErrors(result.errors())) {
-            throw new IdukayApiException(
-                "Idukay rejected the course period request");
+            throw new IdukayApiException("Idukay rejected the course period request");
         }
 
-        IdukayCustomYearDto customYear =
-            result.response();
+        IdukayCustomYearDto customYear = result.response();
 
         if (customYear == null) {
-            throw new IdukayApiException(
-                "Idukay did not return a custom year for the requested course");
+            throw new IdukayApiException("Idukay did not return a custom year for the requested course");
         }
 
         return customYear;
