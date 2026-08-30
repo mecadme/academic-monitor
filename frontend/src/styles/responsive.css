@@ -1,0 +1,112 @@
+@media (max-width: 940px) {
+  .topbar-content {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .brand-subtitle {
+    margin-left: 0;
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .idukay-login-grid {
+    grid-template-columns:
+      1fr 1fr;
+  }
+
+  .connection-action {
+    grid-column: 1 / -1;
+  }
+
+  .idukay-connected-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .sync-result-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .container {
+    width: min(
+      calc(100% - 24px),
+      1160px
+    );
+  }
+
+  .topbar-content {
+    min-height: auto;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .actions .btn {
+    flex: 1;
+  }
+
+  .brand-logo {
+    width: 46px;
+    height: 46px;
+  }
+
+  .summary-grid {
+    grid-template-columns:
+      1fr 1fr;
+
+    gap: 10px;
+  }
+
+  .summary-card {
+    padding: 18px;
+  }
+
+  .summary-value {
+    font-size: 29px;
+  }
+
+  .integration-heading {
+    flex-direction: column;
+  }
+
+  .idukay-login-grid,
+  .idukay-connected-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .idukay-sync-actions > .btn {
+    width: 100%;
+    align-self: stretch;
+  }
+
+  .sync-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .panel-header .btn {
+    width: 100%;
+  }
+
+  .dashboard-table th,
+  .dashboard-table td {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}

@@ -6,6 +6,13 @@ import io.academicmonitor.academic.application.port.AcademicPlatformContext;
 import io.academicmonitor.academic.application.port.AcademicPlatformFilter;
 import io.academicmonitor.academic.application.port.AcademicPlatformSnapshot;
 import io.academicmonitor.integration.idukay.IdukayAcademicPlatformAdapter;
+import io.academicmonitor.integration.idukay.auth.IdukayAuthenticatedSession;
+import io.academicmonitor.integration.idukay.auth.IdukaySessionProvider;
+import io.academicmonitor.integration.idukay.course.IdukayTeacherCourseDto;
+import io.academicmonitor.integration.idukay.course.IdukayTeacherCoursesClient;
+import io.academicmonitor.integration.idukay.period.IdukayCoursePeriodClient;
+import io.academicmonitor.integration.idukay.period.IdukayCustomYearDto;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,18 +29,68 @@ import org.springframework.web.bind.annotation.RestController;
     havingValue = "true")
 public class IdukayTestSnapshotController {
 
-    private static final String PLATFORM_CODE =
-        "IDUKAY";
+    private static final String PLATFORM_CODE = "IDUKAY";
 
     private final IdukayAcademicPlatformAdapter adapter;
     private final AcademicSyncService syncService;
+    private final IdukaySessionProvider sessionProvider;
+    private final IdukayTeacherCoursesClient teacherCoursesClient;
+    private final IdukayCoursePeriodClient coursePeriodClient;
 
     public IdukayTestSnapshotController(
         IdukayAcademicPlatformAdapter adapter,
-        AcademicSyncService syncService) {
+        AcademicSyncService syncService,
+        IdukaySessionProvider sessionProvider,
+        IdukayTeacherCoursesClient teacherCoursesClient,
+        IdukayCoursePeriodClient coursePeriodClient) {
 
         this.adapter = adapter;
         this.syncService = syncService;
+        this.sessionProvider = sessionProvider;
+        this.teacherCoursesClient = teacherCoursesClient;
+        this.coursePeriodClient = coursePeriodClient;
+    }
+
+    @GetMapping("/test-periods")
+    public TestPeriodsResponse testPeriods(
+        @RequestParam UUID institutionId,
+        @RequestParam UUID teacherUserId) {
+
+        AcademicPlatformContext context =
+            new AcademicPlatformContext(
+                institutionId,
+                teacherUserId);
+
+        IdukayAuthenticatedSession session =
+            sessionProvider.getSession(context);
+
+        List<IdukayTeacherCourseDto> courses =
+            teacherCoursesClient.findTeacherCourses(session);
+
+        if (courses.isEmpty()) {
+            throw new IllegalStateException(
+                "No Idukay teacher courses are available");
+        }
+
+        IdukayCustomYearDto customYear =
+            coursePeriodClient.findCustomYear(
+                session,
+                courses.get(0).id());
+
+        List<TestPeriodResponse> periods =
+            customYear.terms().stream()
+                .map(term ->
+                    new TestPeriodResponse(
+                        term.id(),
+                        term.name(),
+                        term.abbreviation()))
+                .toList();
+
+        return new TestPeriodsResponse(
+            customYear.id(),
+            customYear.name(),
+            customYear.baseScore(),
+            periods);
     }
 
     @GetMapping("/test-snapshot")
@@ -47,8 +104,7 @@ public class IdukayTestSnapshotController {
                 teacherUserId);
 
         AcademicPlatformSnapshot snapshot =
-            adapter.fetchSnapshot(
-                context);
+            adapter.fetchSnapshot(context);
 
         int courses =
             snapshot.courses()
@@ -159,6 +215,19 @@ public class IdukayTestSnapshotController {
             result.openAlerts(),
             result.warnings(),
             result.critical());
+    }
+
+    public record TestPeriodsResponse(
+        String academicYearId,
+        String academicYear,
+        java.math.BigDecimal baseScore,
+        List<TestPeriodResponse> periods) {
+    }
+
+    public record TestPeriodResponse(
+        String id,
+        String name,
+        String abbreviation) {
     }
 
     public record TestSnapshotResponse(

@@ -222,7 +222,7 @@ public class AcademicSyncService {
             course,
             platformCourse);
 
-        int gradesProcessed =
+        ActivityGradeSyncResult processingResult =
             synchronizeActivitiesAndGrades(
                 institutionId,
                 platformCode,
@@ -230,9 +230,9 @@ public class AcademicSyncService {
                 platformCourse);
 
         List<Alert> openAlerts =
-            alertRepository.findByCourseIdAndStatus(
+            findOpenAlertsForProcessedActivities(
                 course.getId(),
-                AlertStatus.OPEN);
+                processingResult.activityIds());
 
         long warnings =
             openAlerts.stream()
@@ -252,10 +252,25 @@ public class AcademicSyncService {
             course.getId(),
             course.getName(),
             platformCourse.students().size(),
-            gradesProcessed,
+            processingResult.gradesProcessed(),
             openAlerts.size(),
             warnings,
             critical);
+    }
+
+    private List<Alert> findOpenAlertsForProcessedActivities(
+        UUID courseId,
+        List<UUID> activityIds) {
+
+        if (activityIds.isEmpty()) {
+            return List.of();
+        }
+
+        return alertRepository
+            .findByCourseIdAndStatusAndActivityIdIn(
+                courseId,
+                AlertStatus.OPEN,
+                activityIds);
     }
 
     private PlatformCourseSnapshot resolveSingleCourse(
@@ -348,13 +363,16 @@ public class AcademicSyncService {
         }
     }
 
-    private int synchronizeActivitiesAndGrades(
+    private ActivityGradeSyncResult synchronizeActivitiesAndGrades(
         UUID institutionId,
         String platformCode,
         AcademicCourse course,
         PlatformCourseSnapshot platformCourse) {
 
         int gradesProcessed = 0;
+
+        List<UUID> activityIds =
+            new ArrayList<>();
 
         for (PlatformActivitySnapshot platformActivity :
             platformCourse.activities()) {
@@ -364,6 +382,9 @@ public class AcademicSyncService {
                     platformCode,
                     course,
                     platformActivity);
+
+            activityIds.add(
+                activity.getId());
 
             for (PlatformGradeSnapshot platformGrade :
                 platformActivity.grades()) {
@@ -379,7 +400,9 @@ public class AcademicSyncService {
             }
         }
 
-        return gradesProcessed;
+        return new ActivityGradeSyncResult(
+            gradesProcessed,
+            activityIds);
     }
 
     private Activity synchronizeActivity(
@@ -471,5 +494,17 @@ public class AcademicSyncService {
         }
 
         return value.trim();
+    }
+
+    private record ActivityGradeSyncResult(
+        int gradesProcessed,
+        List<UUID> activityIds) {
+
+        private ActivityGradeSyncResult {
+            activityIds =
+                activityIds == null
+                    ? List.of()
+                    : List.copyOf(activityIds);
+        }
     }
 }

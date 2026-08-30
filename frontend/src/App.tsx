@@ -1,32 +1,68 @@
 import { useEffect, useState } from 'react';
 import './App.css';
-import { type DashboardResult, getDashboard, syncDemo } from './api/demo';
-import { testIdukayLogin } from './features/idukay/api/testIdukayLogin';
+
+import {
+  type DashboardResult,
+  getDashboard,
+  syncDemo,
+} from './api/demo';
+
+import { ActivityPanel } from './features/dashboard/components/ActivityPanel';
+import { DashboardHero } from './features/dashboard/components/DashboardHero';
+import { DashboardSummary } from './features/dashboard/components/DashboardSummary';
+
+import { IdukayIntegrationCard } from './features/dashboard/components/IdukayIntegrationCard';
+import { useIdukayIntegration } from './features/idukay/hooks/useIdukayIntegration';
+
+import { AppHeader } from './components/layout/AppHeader';
 
 function App() {
-  const [dashboard, setDashboard] = useState<DashboardResult | null>(null);
+  const [dashboard, setDashboard] =
+    useState<DashboardResult | null>(null);
 
-  const [teacherUserId, setTeacherUserId] = useState<string | null>(null);
-  const [institutionId, setInstitutionId] = useState<string | null>(null);
+  const [teacherUserId, setTeacherUserId] =
+    useState<string | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [institutionId, setInstitutionId] =
+    useState<string | null>(null);
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [loading, setLoading] =
+    useState(true);
 
-  async function loadScenario(scenario: 'INITIAL' | 'IMPROVED') {
+  const [syncing, setSyncing] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const idukay = useIdukayIntegration({
+    institutionId,
+    teacherUserId,
+  });
+
+  async function loadScenario(
+    scenario: 'INITIAL' | 'IMPROVED',
+  ) {
     try {
       setSyncing(true);
       setError(null);
 
-      const sync = await syncDemo(scenario);
+      const sync =
+        await syncDemo(scenario);
 
-      setInstitutionId(sync.institutionId);
-      setTeacherUserId(sync.teacherUserId);
+      setInstitutionId(
+        sync.institutionId,
+      );
 
-      const data = await getDashboard(sync.teacherUserId);
+      setTeacherUserId(
+        sync.teacherUserId,
+      );
+
+      const data =
+        await getDashboard(
+          sync.teacherUserId,
+        );
+
       setDashboard(data);
     } catch (err) {
       setError(
@@ -40,32 +76,6 @@ function App() {
     }
   }
 
-  async function testRealIdukayLogin() {
-    if (!institutionId || !teacherUserId) {
-      setError('No hay contexto académico disponible.');
-      return;
-    }
-
-    try {
-      setError(null);
-
-      const result = await testIdukayLogin({
-        email,
-        password,
-        institutionId,
-        teacherUserId,
-      });
-
-      console.log(result);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'No se pudo conectar con Idukay.',
-      );
-    }
-  }
-
   async function refreshDashboard() {
     try {
       if (!teacherUserId) {
@@ -74,7 +84,10 @@ function App() {
 
       setError(null);
 
-      const data = await getDashboard(teacherUserId);
+      const data =
+        await getDashboard(
+          teacherUserId,
+        );
 
       setDashboard(data);
     } catch (err) {
@@ -94,8 +107,17 @@ function App() {
     return (
       <main className="app-shell loading-shell">
         <div className="loading-card">
-          <h1>Academic Monitor</h1>
-          <p>Preparando entorno de demostración...</p>
+          <div className="loading-mark">
+            AM
+          </div>
+
+          <h1>
+            Academic Monitor
+          </h1>
+
+          <p>
+            Preparando entorno de demostración...
+          </p>
         </div>
       </main>
     );
@@ -105,12 +127,23 @@ function App() {
     return (
       <main className="app-shell loading-shell">
         <div className="loading-card">
-          <h1>No se pudo cargar Academic Monitor</h1>
-          <p>{error}</p>
+          <div className="loading-mark">
+            !
+          </div>
+
+          <h1>
+            No se pudo cargar Academic Monitor
+          </h1>
+
+          <p>
+            {error}
+          </p>
 
           <button
             className="btn btn-primary"
-            onClick={() => loadScenario('INITIAL')}
+            onClick={() =>
+              loadScenario('INITIAL')
+            }
           >
             Reintentar
           </button>
@@ -123,209 +156,115 @@ function App() {
     return null;
   }
 
+  const displayedError =
+    error ?? idukay.error;
+
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div className="container topbar-content">
-          <div>
-            <p className="eyebrow">MODO DEMO</p>
-            <h1 className="brand-title">Academic Monitor</h1>
-            <p className="brand-subtitle">
-              Monitoreo automático de alertas académicas
-            </p>
-          </div>
+      <AppHeader
+        syncing={syncing}
+        onInitialSync={() =>
+          loadScenario('INITIAL')
+        }
+        onImprovement={() =>
+          loadScenario('IMPROVED')
+        }
+      />
 
-          <div className="actions">
-            <button
-              className="btn btn-secondary"
-              disabled={syncing}
-              onClick={() => loadScenario('INITIAL')}
-            >
-              {syncing ? 'Procesando...' : 'Sincronizar'}
-            </button>
+      <DashboardHero
+        dashboard={dashboard}
+      />
 
-            <button
-              className="btn btn-primary"
-              disabled={syncing}
-              onClick={() => loadScenario('IMPROVED')}
-            >
-              {syncing ? 'Procesando...' : 'Simular mejora'}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <section className="container hero">
-        <div className="hero-text">
-          <p className="section-label">Curso monitoreado</p>
-          <h2 className="course-title">{dashboard.courseName}</h2>
-          <p className="course-subtitle">{dashboard.subject}</p>
-        </div>
-
-        <div className="hero-note">
-          <p className="hero-note-title">Regla de alerta</p>
-
-          <p>
-            <strong>Crítico:</strong> nota ≤ 5.00
-          </p>
-
-          <p>
-            <strong>Aviso:</strong> nota {'>'} 5.00 y ≤ 7.00
-          </p>
-        </div>
-      </section>
-
-      {error && (
+      {displayedError && (
         <section className="container">
-          <div className="error-banner">{error}</div>
+          <div className="error-banner">
+            <span className="error-icon">
+              !
+            </span>
+
+            <span>
+              {displayedError}
+            </span>
+          </div>
         </section>
       )}
 
-      <section className="container summary-grid">
-        <SummaryCard
-          label="Estudiantes"
-          value={dashboard.summary.totalStudents}
-        />
+      <DashboardSummary
+        summary={dashboard.summary}
+      />
 
-        <SummaryCard
-          label="Alertas abiertas"
-          value={dashboard.summary.openAlerts}
-        />
+      <IdukayIntegrationCard
+        connected={
+          idukay.connected
+        }
+        connecting={
+          idukay.connecting
+        }
+        syncing={
+          idukay.syncing
+        }
+        email={
+          idukay.email
+        }
+        password={
+          idukay.password
+        }
+        academicYear={
+          idukay.academicYear
+        }
+        baseScore={
+          idukay.baseScore
+        }
+        periods={
+          idukay.periods
+        }
+        selectedPeriodId={
+          idukay.selectedPeriodId
+        }
+        syncResult={
+          idukay.syncResult
+        }
+        onEmailChange={
+          idukay.setEmail
+        }
+        onPasswordChange={
+          idukay.setPassword
+        }
+        onConnect={
+          idukay.connect
+        }
+        onPeriodChange={
+          idukay.selectPeriod
+        }
+        onSync={
+          idukay.synchronizeSelectedPeriod
+        }
+      />
 
-        <SummaryCard
-          label="Avisos"
-          value={dashboard.summary.warnings}
-        />
-
-        <SummaryCard
-          label="Críticos"
-          value={dashboard.summary.critical}
-        />
-      </section>
-
-      <section className="container panel">
-        <div className="panel-header">
-          <div>
-            <p className="section-label">Actividad analizada</p>
-            <h3 className="panel-title">
-              {dashboard.activity.name}
-            </h3>
-          </div>
-
-          <button
-            className="btn btn-ghost"
-            onClick={refreshDashboard}
-          >
-            Actualizar vista
-          </button>
-
-          <input
-            type="email"
-            value={email}
-            placeholder="Correo de Idukay"
-            onChange={(event) =>
-              setEmail(event.target.value)
-            }
-          />
-
-          <input
-            type="password"
-            value={password}
-            placeholder="Contraseña de Idukay"
-            onChange={(event) =>
-              setPassword(event.target.value)
-            }
-          />
-
-          <button onClick={testRealIdukayLogin}>
-            Probar conexión Idukay
-          </button>
-        </div>
-
-        <div className="table-wrapper">
-          <table className="dashboard-table">
-            <thead>
-            <tr>
-              <th>Estudiante</th>
-              <th>Nota</th>
-              <th>Estado</th>
-            </tr>
-            </thead>
-
-            <tbody>
-            {dashboard.students.map((student) => (
-              <tr key={student.id}>
-                <td className="student-name">
-                  {student.name}
-                </td>
-
-                <td className="student-score">
-                  {Number(student.score).toLocaleString(
-                    'es-EC',
-                    {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    },
-                  )}
-                </td>
-
-                <td>
-                  <StatusBadge status={student.status} />
-                </td>
-              </tr>
-            ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <ActivityPanel
+        dashboard={dashboard}
+        onRefresh={refreshDashboard}
+      />
 
       <section className="container footer-note">
         <div className="footer-note-card">
-          <strong>Escenario actual:</strong> Use “Sincronizar” para cargar el
-          escenario base y “Simular mejora” para mostrar la resolución
-          automática de alertas.
+          <div className="footer-note-icon">
+            i
+          </div>
+
+          <p>
+            <strong>
+              Entorno de demostración.
+            </strong>{' '}
+
+            “Sincronizar demo” carga el
+            escenario inicial y “Simular
+            mejora” permite observar la
+            resolución automática de alertas.
+          </p>
         </div>
       </section>
     </main>
-  );
-}
-
-function SummaryCard({
-                       label,
-                       value,
-                     }: {
-  label: string;
-  value: number;
-}) {
-  return (
-    <article className="summary-card">
-      <p className="summary-label">{label}</p>
-      <p className="summary-value">{value}</p>
-    </article>
-  );
-}
-
-function StatusBadge({
-                       status,
-                     }: {
-  status: 'OK' | 'WARNING' | 'CRITICAL';
-}) {
-  const labels = {
-    OK: 'Bien',
-    WARNING: 'Aviso',
-    CRITICAL: 'Crítico',
-  };
-
-  const className = {
-    OK: 'status-badge status-ok',
-    WARNING: 'status-badge status-warning',
-    CRITICAL: 'status-badge status-critical',
-  };
-
-  return (
-    <span className={className[status]}>
-      {labels[status]}
-    </span>
   );
 }
 
