@@ -1,0 +1,218 @@
+export type IdukayFingerprint = {
+  user_agent: string
+  language: string
+  languages: string[]
+  platform: string
+  hardware_concurrency: number | null
+  device_memory: number | null
+  screen: {
+    width: number
+    height: number
+    avail_width: number
+    avail_height: number
+    color_depth: number
+    pixel_ratio: number
+  }
+  timezone: string
+  touch_points: number
+  canvas_hash: string | null
+  webgl_renderer: string | null
+  audio_hash: string | null
+}
+
+async function sha256(value: string): Promise<string | null> {
+  if (!window.crypto?.subtle) {
+    return null
+  }
+
+  const bytes = new TextEncoder().encode(value)
+  const digest = await window.crypto.subtle.digest("SHA-256", bytes)
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+}
+
+async function createCanvasHash(): Promise<string | null> {
+  const canvas = document.createElement("canvas")
+  const context = canvas.getContext("2d")
+
+  if (!context) {
+    return null
+  }
+
+  context.textBaseline = "top"
+  context.font = "14px Arial"
+  context.fillText("device-fingerprint", 2, 2)
+
+  return sha256(canvas.toDataURL())
+}
+
+function getWebGlRenderer(): string | null {
+  if (typeof WebGLRenderingContext === "undefined") {
+    return null
+  }
+
+  const canvas = document.createElement("canvas")
+
+  const context =
+    canvas.getContext("webgl") ??
+    canvas.getContext("experimental-webgl")
+
+  if (!(context instanceof WebGLRenderingContext)) {
+    return null
+  }
+
+  const extension = context.getExtension(
+    "WEBGL_debug_renderer_info",
+  )
+
+  if (!extension) {
+    return null
+  }
+
+  return context.getParameter(
+    extension.UNMASKED_RENDERER_WEBGL,
+  ) as string
+}
+
+async function createAudioHash(): Promise<string | null> {
+  try {
+    const AudioContextClass =
+      window.OfflineAudioContext
+
+    if (!AudioContextClass) {
+      return null
+    }
+
+    const context = new AudioContextClass(
+      1,
+      44100,
+      44100,
+    )
+
+    const oscillator = context.createOscillator()
+
+    oscillator.type = "triangle"
+    oscillator.frequency.setValueAtTime(
+      10000,
+      context.currentTime,
+    )
+
+    const compressor =
+      context.createDynamicsCompressor()
+
+    compressor.threshold.setValueAtTime(
+      -50,
+      context.currentTime,
+    )
+
+    compressor.knee.setValueAtTime(
+      40,
+      context.currentTime,
+    )
+
+    compressor.ratio.setValueAtTime(
+      12,
+      context.currentTime,
+    )
+
+    compressor.attack.setValueAtTime(
+      0,
+      context.currentTime,
+    )
+
+    compressor.release.setValueAtTime(
+      0.25,
+      context.currentTime,
+    )
+
+    oscillator.connect(compressor)
+    compressor.connect(context.destination)
+
+    oscillator.start(0)
+
+    const rendered =
+      await context.startRendering()
+
+    const values =
+      rendered
+        .getChannelData(0)
+        .slice(4500, 5000)
+        .toString()
+
+    return sha256(values)
+  } catch {
+    return null
+  }
+}
+
+export async function createIdukayFingerprint(): Promise<IdukayFingerprint> {
+  const [
+    canvasHash,
+    audioHash,
+  ] = await Promise.all([
+    createCanvasHash(),
+    createAudioHash(),
+  ])
+
+  const navigatorWithMemory =
+    navigator as Navigator & {
+      deviceMemory?: number
+    }
+
+  return {
+    user_agent: navigator.userAgent,
+
+    language:
+      navigator.language ?? "",
+
+    languages:
+      navigator.languages?.length
+        ? Array.from(navigator.languages)
+        : [navigator.language],
+
+    platform:
+      navigator.platform ?? "",
+
+    hardware_concurrency:
+      navigator.hardwareConcurrency || null,
+
+    device_memory:
+      navigatorWithMemory.deviceMemory ?? null,
+
+    screen: {
+      width: window.screen.width,
+      height: window.screen.height,
+
+      avail_width:
+      window.screen.availWidth,
+
+      avail_height:
+      window.screen.availHeight,
+
+      color_depth:
+      window.screen.colorDepth,
+
+      pixel_ratio:
+        window.devicePixelRatio || 1,
+    },
+
+    timezone:
+      Intl.DateTimeFormat()
+        .resolvedOptions()
+        .timeZone ?? "",
+
+    touch_points:
+      navigator.maxTouchPoints || 0,
+
+    canvas_hash:
+    canvasHash,
+
+    webgl_renderer:
+      getWebGlRenderer(),
+
+    audio_hash:
+    audioHash,
+  }
+}

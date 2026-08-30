@@ -92,9 +92,11 @@ class AcademicSyncServiceTest {
         Activity persistedActivity = org.mockito.Mockito.mock(Activity.class);
 
         when(persistedCourse.getId()).thenReturn(COURSE_ID);
+
         when(persistedCourse.getName()).thenReturn("1.º BGU A");
 
         when(persistedStudent.getId()).thenReturn(STUDENT_ID);
+
         when(persistedActivity.getId()).thenReturn(ACTIVITY_ID);
 
         when(courseRepository.findByInstitutionIdAndPlatformCodeAndExternalId(
@@ -120,18 +122,24 @@ class AcademicSyncServiceTest {
         when(gradeRepository.findByActivityIdAndStudentId(ACTIVITY_ID, STUDENT_ID))
                 .thenReturn(Optional.empty());
 
-        when(alertRepository.findByCourseIdAndStatus(COURSE_ID, AlertStatus.OPEN))
+        when(alertRepository.findByCourseIdAndStatusAndActivityIdIn(COURSE_ID, AlertStatus.OPEN, List.of(ACTIVITY_ID)))
                 .thenReturn(List.of());
 
         AcademicSyncResult result =
                 service.synchronize(INSTITUTION_ID, TEACHER_ID, PLATFORM, platformWithScore("4.80"));
 
         assertEquals(COURSE_ID, result.courseId());
+
         assertEquals("1.º BGU A", result.courseName());
+
         assertEquals(1, result.students());
+
         assertEquals(1, result.gradesProcessed());
+
         assertEquals(0, result.openAlerts());
+
         assertEquals(0, result.warnings());
+
         assertEquals(0, result.critical());
 
         ArgumentCaptor<AcademicCourse> courseCaptor = ArgumentCaptor.forClass(AcademicCourse.class);
@@ -141,11 +149,17 @@ class AcademicSyncServiceTest {
         AcademicCourse createdCourse = courseCaptor.getValue();
 
         assertEquals(INSTITUTION_ID, createdCourse.getInstitutionId());
+
         assertEquals(TEACHER_ID, createdCourse.getTeacherUserId());
+
         assertEquals(PLATFORM, createdCourse.getPlatformCode());
+
         assertEquals("physics-1bgu-a", createdCourse.getExternalId());
+
         assertEquals("1.º BGU A", createdCourse.getName());
+
         assertEquals("Física", createdCourse.getSubject());
+
         assertTrue(createdCourse.isMonitoringEnabled());
 
         ArgumentCaptor<Student> studentCaptor = ArgumentCaptor.forClass(Student.class);
@@ -155,8 +169,11 @@ class AcademicSyncServiceTest {
         Student createdStudent = studentCaptor.getValue();
 
         assertEquals(INSTITUTION_ID, createdStudent.getInstitutionId());
+
         assertEquals("student-001", createdStudent.getExternalId());
+
         assertEquals("Ana", createdStudent.getFirstName());
+
         assertEquals("Torres", createdStudent.getLastName());
 
         ArgumentCaptor<Activity> activityCaptor = ArgumentCaptor.forClass(Activity.class);
@@ -166,8 +183,11 @@ class AcademicSyncServiceTest {
         Activity createdActivity = activityCaptor.getValue();
 
         assertEquals(COURSE_ID, createdActivity.getCourseId());
+
         assertEquals("Movimiento rectilíneo", createdActivity.getName());
+
         assertEquals(new BigDecimal("10.00"), createdActivity.getMaxScore());
+
         assertEquals(LocalDate.of(2026, 9, 25), createdActivity.getDueDate());
 
         verify(enrollmentRepository).save(any(CourseEnrollment.class));
@@ -179,11 +199,16 @@ class AcademicSyncServiceTest {
         Grade createdGrade = gradeCaptor.getValue();
 
         assertEquals(ACTIVITY_ID, createdGrade.getActivityId());
+
         assertEquals(STUDENT_ID, createdGrade.getStudentId());
+
         assertEquals(new BigDecimal("4.80"), createdGrade.getScore());
 
         verify(alertEvaluationService)
                 .evaluate(INSTITUTION_ID, COURSE_ID, ACTIVITY_ID, STUDENT_ID, new BigDecimal("4.80"));
+
+        verify(alertRepository)
+                .findByCourseIdAndStatusAndActivityIdIn(COURSE_ID, AlertStatus.OPEN, List.of(ACTIVITY_ID));
     }
 
     @Test
@@ -196,9 +221,11 @@ class AcademicSyncServiceTest {
         Activity activity = org.mockito.Mockito.mock(Activity.class);
 
         when(course.getId()).thenReturn(COURSE_ID);
+
         when(course.getName()).thenReturn("1.º BGU A");
 
         when(student.getId()).thenReturn(STUDENT_ID);
+
         when(activity.getId()).thenReturn(ACTIVITY_ID);
 
         Grade existingGrade =
@@ -221,7 +248,7 @@ class AcademicSyncServiceTest {
         when(gradeRepository.findByActivityIdAndStudentId(ACTIVITY_ID, STUDENT_ID))
                 .thenReturn(Optional.of(existingGrade));
 
-        when(alertRepository.findByCourseIdAndStatus(COURSE_ID, AlertStatus.OPEN))
+        when(alertRepository.findByCourseIdAndStatusAndActivityIdIn(COURSE_ID, AlertStatus.OPEN, List.of(ACTIVITY_ID)))
                 .thenReturn(List.of());
 
         AcademicSyncResult result =
@@ -230,6 +257,7 @@ class AcademicSyncServiceTest {
         assertEquals(new BigDecimal("8.10"), existingGrade.getScore());
 
         assertEquals(1, result.students());
+
         assertEquals(1, result.gradesProcessed());
 
         verify(courseRepository, never()).save(any(AcademicCourse.class));
@@ -244,10 +272,13 @@ class AcademicSyncServiceTest {
 
         verify(alertEvaluationService)
                 .evaluate(INSTITUTION_ID, COURSE_ID, ACTIVITY_ID, STUDENT_ID, new BigDecimal("8.10"));
+
+        verify(alertRepository)
+                .findByCourseIdAndStatusAndActivityIdIn(COURSE_ID, AlertStatus.OPEN, List.of(ACTIVITY_ID));
     }
 
     @Test
-    void synchronizeReturnsAlertSummary() {
+    void synchronizeReturnsAlertSummaryForProcessedActivities() {
 
         AcademicCourse course = org.mockito.Mockito.mock(AcademicCourse.class);
 
@@ -256,9 +287,11 @@ class AcademicSyncServiceTest {
         Activity activity = org.mockito.Mockito.mock(Activity.class);
 
         when(course.getId()).thenReturn(COURSE_ID);
+
         when(course.getName()).thenReturn("1.º BGU A");
 
         when(student.getId()).thenReturn(STUDENT_ID);
+
         when(activity.getId()).thenReturn(ACTIVITY_ID);
 
         Grade existingGrade =
@@ -293,15 +326,22 @@ class AcademicSyncServiceTest {
 
         when(critical.getSeverity()).thenReturn(AlertSeverity.CRITICAL);
 
-        when(alertRepository.findByCourseIdAndStatus(COURSE_ID, AlertStatus.OPEN))
+        when(alertRepository.findByCourseIdAndStatusAndActivityIdIn(COURSE_ID, AlertStatus.OPEN, List.of(ACTIVITY_ID)))
                 .thenReturn(List.of(warningOne, warningTwo, critical));
 
         AcademicSyncResult result =
                 service.synchronize(INSTITUTION_ID, TEACHER_ID, PLATFORM, platformWithScore("4.80"));
 
         assertEquals(3, result.openAlerts());
+
         assertEquals(2, result.warnings());
+
         assertEquals(1, result.critical());
+
+        verify(alertRepository)
+                .findByCourseIdAndStatusAndActivityIdIn(COURSE_ID, AlertStatus.OPEN, List.of(ACTIVITY_ID));
+
+        verify(alertRepository, never()).findByCourseIdAndStatus(COURSE_ID, AlertStatus.OPEN);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package io.academicmonitor.academic.application;
 
 import io.academicmonitor.academic.application.port.AcademicPlatformContext;
+import io.academicmonitor.academic.application.port.AcademicPlatformFilter;
 import io.academicmonitor.academic.application.port.AcademicPlatformPort;
 import io.academicmonitor.academic.application.port.AcademicPlatformSnapshot;
 import io.academicmonitor.academic.application.port.PlatformActivitySnapshot;
@@ -22,6 +23,7 @@ import io.academicmonitor.monitoring.domain.Alert;
 import io.academicmonitor.monitoring.domain.AlertRepository;
 import io.academicmonitor.monitoring.domain.AlertSeverity;
 import io.academicmonitor.monitoring.domain.AlertStatus;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -60,27 +62,95 @@ public class AcademicSyncService {
     public AcademicSyncResult synchronize(
             UUID institutionId, UUID teacherUserId, String platformCode, AcademicPlatformPort platform) {
 
+        return synchronize(institutionId, teacherUserId, platformCode, platform, AcademicPlatformFilter.all());
+    }
+
+    @Transactional
+    public AcademicSyncResult synchronize(
+            UUID institutionId,
+            UUID teacherUserId,
+            String platformCode,
+            AcademicPlatformPort platform,
+            AcademicPlatformFilter filter) {
+
         requireId(institutionId, "institutionId");
+
         requireId(teacherUserId, "teacherUserId");
+
         requireText(platformCode, "platformCode");
 
         if (platform == null) {
             throw new IllegalArgumentException("platform is required");
         }
 
+        AcademicPlatformFilter effectiveFilter = filter == null ? AcademicPlatformFilter.all() : filter;
+
         AcademicPlatformContext context = new AcademicPlatformContext(institutionId, teacherUserId);
 
-        AcademicPlatformSnapshot snapshot = platform.fetchSnapshot(context);
+        AcademicPlatformSnapshot snapshot = platform.fetchSnapshot(context, effectiveFilter);
 
         PlatformCourseSnapshot platformCourse = resolveSingleCourse(snapshot);
+
+        return synchronizePlatformCourse(institutionId, teacherUserId, platformCode, platformCourse);
+    }
+
+    @Transactional
+    public AcademicBatchSyncResult synchronizeAll(
+            UUID institutionId, UUID teacherUserId, String platformCode, AcademicPlatformPort platform) {
+
+        return synchronizeAll(institutionId, teacherUserId, platformCode, platform, AcademicPlatformFilter.all());
+    }
+
+    @Transactional
+    public AcademicBatchSyncResult synchronizeAll(
+            UUID institutionId,
+            UUID teacherUserId,
+            String platformCode,
+            AcademicPlatformPort platform,
+            AcademicPlatformFilter filter) {
+
+        requireId(institutionId, "institutionId");
+
+        requireId(teacherUserId, "teacherUserId");
+
+        requireText(platformCode, "platformCode");
+
+        if (platform == null) {
+            throw new IllegalArgumentException("platform is required");
+        }
+
+        AcademicPlatformFilter effectiveFilter = filter == null ? AcademicPlatformFilter.all() : filter;
+
+        AcademicPlatformContext context = new AcademicPlatformContext(institutionId, teacherUserId);
+
+        AcademicPlatformSnapshot snapshot = platform.fetchSnapshot(context, effectiveFilter);
+
+        validateSnapshot(snapshot);
+
+        List<AcademicSyncResult> results = new ArrayList<>();
+
+        for (PlatformCourseSnapshot platformCourse : snapshot.courses()) {
+
+            AcademicSyncResult result =
+                    synchronizePlatformCourse(institutionId, teacherUserId, platformCode, platformCourse);
+
+            results.add(result);
+        }
+
+        return new AcademicBatchSyncResult(results);
+    }
+
+    private AcademicSyncResult synchronizePlatformCourse(
+            UUID institutionId, UUID teacherUserId, String platformCode, PlatformCourseSnapshot platformCourse) {
 
         AcademicCourse course = synchronizeCourse(institutionId, teacherUserId, platformCode, platformCourse);
 
         synchronizeStudents(institutionId, platformCode, course, platformCourse);
 
-        int gradesProcessed = synchronizeActivitiesAndGrades(institutionId, platformCode, course, platformCourse);
+        ActivityGradeSyncResult processingResult =
+                synchronizeActivitiesAndGrades(institutionId, platformCode, course, platformCourse);
 
-        List<Alert> openAlerts = alertRepository.findByCourseIdAndStatus(course.getId(), AlertStatus.OPEN);
+        List<Alert> openAlerts = findOpenAlertsForProcessedActivities(course.getId(), processingResult.activityIds());
 
         long warnings = openAlerts.stream()
                 .filter(alert -> alert.getSeverity() == AlertSeverity.WARNING)
@@ -94,21 +164,37 @@ public class AcademicSyncService {
                 course.getId(),
                 course.getName(),
                 platformCourse.students().size(),
-                gradesProcessed,
+                processingResult.gradesProcessed(),
                 openAlerts.size(),
                 warnings,
                 critical);
     }
 
+    private List<Alert> findOpenAlertsForProcessedActivities(UUID courseId, List<UUID> activityIds) {
+
+        if (activityIds.isEmpty()) {
+            return List.of();
+        }
+
+        return alertRepository.findByCourseIdAndStatusAndActivityIdIn(courseId, AlertStatus.OPEN, activityIds);
+    }
+
     private PlatformCourseSnapshot resolveSingleCourse(AcademicPlatformSnapshot snapshot) {
+
+        validateSnapshot(snapshot);
+
+        return snapshot.courses().getFirst();
+    }
+
+    private static void validateSnapshot(AcademicPlatformSnapshot snapshot) {
 
         if (snapshot == null) {
             throw new IllegalStateException("Academic platform returned no snapshot");
         }
 
-        return snapshot.courses().stream()
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Academic platform returned no courses"));
+        if (snapshot.courses().isEmpty()) {
+            throw new IllegalStateException("Academic platform returned no courses");
+        }
     }
 
     private AcademicCourse synchronizeCourse(
@@ -154,14 +240,18 @@ public class AcademicSyncService {
         }
     }
 
-    private int synchronizeActivitiesAndGrades(
+    private ActivityGradeSyncResult synchronizeActivitiesAndGrades(
             UUID institutionId, String platformCode, AcademicCourse course, PlatformCourseSnapshot platformCourse) {
 
         int gradesProcessed = 0;
 
+        List<UUID> activityIds = new ArrayList<>();
+
         for (PlatformActivitySnapshot platformActivity : platformCourse.activities()) {
 
             Activity activity = synchronizeActivity(platformCode, course, platformActivity);
+
+            activityIds.add(activity.getId());
 
             for (PlatformGradeSnapshot platformGrade : platformActivity.grades()) {
 
@@ -171,7 +261,7 @@ public class AcademicSyncService {
             }
         }
 
-        return gradesProcessed;
+        return new ActivityGradeSyncResult(gradesProcessed, activityIds);
     }
 
     private Activity synchronizeActivity(
@@ -226,9 +316,17 @@ public class AcademicSyncService {
     private static String requireText(String value, String field) {
 
         if (value == null || value.isBlank()) {
+
             throw new IllegalArgumentException(field + " is required");
         }
 
         return value.trim();
+    }
+
+    private record ActivityGradeSyncResult(int gradesProcessed, List<UUID> activityIds) {
+
+        private ActivityGradeSyncResult {
+            activityIds = activityIds == null ? List.of() : List.copyOf(activityIds);
+        }
     }
 }
