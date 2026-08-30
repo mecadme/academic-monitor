@@ -4,11 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.academicmonitor.academic.application.port.AcademicPlatformContext;
+import io.academicmonitor.academic.application.port.AcademicPlatformFilter;
 import io.academicmonitor.academic.application.port.AcademicPlatformPort;
 import io.academicmonitor.academic.application.port.AcademicPlatformSnapshot;
 import io.academicmonitor.academic.application.port.PlatformActivitySnapshot;
@@ -36,10 +39,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -79,8 +82,21 @@ class AcademicSyncServiceTest {
     @Mock
     private AlertEvaluationService alertEvaluationService;
 
-    @InjectMocks
     private AcademicSyncService service;
+
+    @BeforeEach
+    void setUp() {
+
+        CourseRosterSynchronizer courseRosterSynchronizer =
+                new CourseRosterSynchronizer(courseRepository, studentRepository, enrollmentRepository);
+
+        ActivityGradeSynchronizer activityGradeSynchronizer = new ActivityGradeSynchronizer(
+                studentRepository, activityRepository, gradeRepository, alertEvaluationService);
+
+        SyncAlertSummaryService alertSummaryService = new SyncAlertSummaryService(alertRepository);
+
+        service = new AcademicSyncService(courseRosterSynchronizer, activityGradeSynchronizer, alertSummaryService);
+    }
 
     @Test
     void synchronizeCreatesCourseStudentEnrollmentActivityAndGrade() {
@@ -363,6 +379,75 @@ class AcademicSyncServiceTest {
                 gradeRepository,
                 alertRepository,
                 alertEvaluationService);
+    }
+
+    @Test
+    void synchronizeAllPreservesFilterAndAggregatesEveryCourseResult() {
+
+        CourseRosterSynchronizer courseRosterSynchronizer = mock(CourseRosterSynchronizer.class);
+
+        ActivityGradeSynchronizer activityGradeSynchronizer = mock(ActivityGradeSynchronizer.class);
+
+        SyncAlertSummaryService alertSummaryService = mock(SyncAlertSummaryService.class);
+
+        AcademicSyncService orchestrationService =
+                new AcademicSyncService(courseRosterSynchronizer, activityGradeSynchronizer, alertSummaryService);
+
+        PlatformCourseSnapshot firstPlatformCourse =
+                new PlatformCourseSnapshot("course-001", "Course 1", "Physics", List.of(), List.of());
+
+        PlatformCourseSnapshot secondPlatformCourse =
+                new PlatformCourseSnapshot("course-002", "Course 2", "Chemistry", List.of(), List.of());
+
+        AcademicPlatformSnapshot snapshot =
+                new AcademicPlatformSnapshot(List.of(firstPlatformCourse, secondPlatformCourse));
+
+        AcademicPlatformPort platform = mock(AcademicPlatformPort.class);
+
+        AcademicPlatformFilter filter = new AcademicPlatformFilter("period-t1");
+
+        when(platform.fetchSnapshot(new AcademicPlatformContext(INSTITUTION_ID, TEACHER_ID), filter))
+                .thenReturn(snapshot);
+
+        AcademicCourse firstCourse = mock(AcademicCourse.class);
+        AcademicCourse secondCourse = mock(AcademicCourse.class);
+
+        UUID secondCourseId = UUID.fromString("66666666-6666-6666-6666-666666666666");
+        UUID secondActivityId = UUID.fromString("77777777-7777-7777-7777-777777777777");
+
+        when(firstCourse.getId()).thenReturn(COURSE_ID);
+        when(firstCourse.getName()).thenReturn("Course 1");
+        when(secondCourse.getId()).thenReturn(secondCourseId);
+        when(secondCourse.getName()).thenReturn("Course 2");
+
+        when(courseRosterSynchronizer.synchronize(INSTITUTION_ID, TEACHER_ID, PLATFORM, firstPlatformCourse))
+                .thenReturn(firstCourse);
+
+        when(courseRosterSynchronizer.synchronize(INSTITUTION_ID, TEACHER_ID, PLATFORM, secondPlatformCourse))
+                .thenReturn(secondCourse);
+
+        when(activityGradeSynchronizer.synchronize(INSTITUTION_ID, PLATFORM, firstCourse, firstPlatformCourse))
+                .thenReturn(new ActivityGradeSynchronizer.Result(10, List.of(ACTIVITY_ID)));
+
+        when(activityGradeSynchronizer.synchronize(INSTITUTION_ID, PLATFORM, secondCourse, secondPlatformCourse))
+                .thenReturn(new ActivityGradeSynchronizer.Result(20, List.of(secondActivityId)));
+
+        when(alertSummaryService.summarize(COURSE_ID, List.of(ACTIVITY_ID)))
+                .thenReturn(new SyncAlertSummaryService.Summary(3, 2, 1));
+
+        when(alertSummaryService.summarize(secondCourseId, List.of(secondActivityId)))
+                .thenReturn(new SyncAlertSummaryService.Summary(4, 2, 2));
+
+        AcademicBatchSyncResult result =
+                orchestrationService.synchronizeAll(INSTITUTION_ID, TEACHER_ID, PLATFORM, platform, filter);
+
+        assertEquals(2, result.coursesProcessed());
+        assertEquals(30, result.gradesProcessed());
+        assertEquals(7, result.openAlerts());
+        assertEquals(4, result.warnings());
+        assertEquals(3, result.critical());
+
+        verify(platform).fetchSnapshot(new AcademicPlatformContext(INSTITUTION_ID, TEACHER_ID), filter);
     }
 
     private AcademicPlatformPort platformWithScore(String score) {

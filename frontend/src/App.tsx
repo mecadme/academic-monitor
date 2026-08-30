@@ -1,15 +1,9 @@
-import { useEffect, useState } from 'react';
 import './App.css';
-
-import {
-  type DashboardResult,
-  getDashboard,
-  syncDemo,
-} from './api/demo';
 
 import { ActivityPanel } from './features/dashboard/components/ActivityPanel';
 import { DashboardHero } from './features/dashboard/components/DashboardHero';
 import { DashboardSummary } from './features/dashboard/components/DashboardSummary';
+import { useDemoDashboard } from './features/dashboard/hooks/useDemoDashboard';
 
 import { IdukayIntegrationCard } from './features/dashboard/components/IdukayIntegrationCard';
 import { useIdukayIntegration } from './features/idukay/hooks/useIdukayIntegration';
@@ -17,93 +11,14 @@ import { useIdukayIntegration } from './features/idukay/hooks/useIdukayIntegrati
 import { AppHeader } from './components/layout/AppHeader';
 
 function App() {
-  const [dashboard, setDashboard] =
-    useState<DashboardResult | null>(null);
-
-  const [teacherUserId, setTeacherUserId] =
-    useState<string | null>(null);
-
-  const [institutionId, setInstitutionId] =
-    useState<string | null>(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [syncing, setSyncing] =
-    useState(false);
-
-  const [error, setError] =
-    useState<string | null>(null);
+  const demo = useDemoDashboard();
 
   const idukay = useIdukayIntegration({
-    institutionId,
-    teacherUserId,
+    institutionId: demo.institutionId,
+    teacherUserId: demo.teacherUserId,
   });
 
-  async function loadScenario(
-    scenario: 'INITIAL' | 'IMPROVED',
-  ) {
-    try {
-      setSyncing(true);
-      setError(null);
-
-      const sync =
-        await syncDemo(scenario);
-
-      setInstitutionId(
-        sync.institutionId,
-      );
-
-      setTeacherUserId(
-        sync.teacherUserId,
-      );
-
-      const data =
-        await getDashboard(
-          sync.teacherUserId,
-        );
-
-      setDashboard(data);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Ocurrió un error inesperado.',
-      );
-    } finally {
-      setSyncing(false);
-      setLoading(false);
-    }
-  }
-
-  async function refreshDashboard() {
-    try {
-      if (!teacherUserId) {
-        return;
-      }
-
-      setError(null);
-
-      const data =
-        await getDashboard(
-          teacherUserId,
-        );
-
-      setDashboard(data);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'No se pudo actualizar el dashboard.',
-      );
-    }
-  }
-
-  useEffect(() => {
-    loadScenario('INITIAL');
-  }, []);
-
-  if (loading) {
+  if (demo.loading) {
     return (
       <main className="app-shell loading-shell">
         <div className="loading-card">
@@ -123,7 +38,7 @@ function App() {
     );
   }
 
-  if (error && !dashboard) {
+  if (demo.error && !demo.dashboard) {
     return (
       <main className="app-shell loading-shell">
         <div className="loading-card">
@@ -136,13 +51,13 @@ function App() {
           </h1>
 
           <p>
-            {error}
+            {demo.error}
           </p>
 
           <button
             className="btn btn-primary"
             onClick={() =>
-              loadScenario('INITIAL')
+              demo.loadScenario('INITIAL')
             }
           >
             Reintentar
@@ -152,27 +67,27 @@ function App() {
     );
   }
 
-  if (!dashboard) {
+  if (!demo.dashboard) {
     return null;
   }
 
   const displayedError =
-    error ?? idukay.error;
+    demo.error ?? idukay.error;
 
   return (
     <main className="app-shell">
       <AppHeader
-        syncing={syncing}
+        syncing={demo.syncing}
         onInitialSync={() =>
-          loadScenario('INITIAL')
+          demo.loadScenario('INITIAL')
         }
         onImprovement={() =>
-          loadScenario('IMPROVED')
+          demo.loadScenario('IMPROVED')
         }
       />
 
       <DashboardHero
-        dashboard={dashboard}
+        dashboard={demo.dashboard}
       />
 
       {displayedError && (
@@ -190,7 +105,7 @@ function App() {
       )}
 
       <DashboardSummary
-        summary={dashboard.summary}
+        summary={demo.dashboard.summary}
       />
 
       <IdukayIntegrationCard
@@ -242,8 +157,8 @@ function App() {
       />
 
       <ActivityPanel
-        dashboard={dashboard}
-        onRefresh={refreshDashboard}
+        dashboard={demo.dashboard}
+        onRefresh={demo.refreshDashboard}
       />
 
       <section className="container footer-note">
