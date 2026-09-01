@@ -134,7 +134,7 @@ class IdukayCourseActivitiesClientTest {
 
         assertEquals(new BigDecimal("8.75"), first.scores().getFirst().score());
 
-        PlatformActivitySnapshot snapshot = IdukayActivityMapper.toSnapshot(first, MAXIMUM_SCORE);
+        PlatformActivitySnapshot snapshot = IdukayActivityMapper.toSnapshot(first, MAXIMUM_SCORE, "term-test-001");
 
         assertEquals("activity-test-001", snapshot.externalId());
 
@@ -143,6 +143,8 @@ class IdukayCourseActivitiesClientTest {
         assertEquals(MAXIMUM_SCORE, snapshot.maximumScore());
 
         assertEquals(LocalDate.of(2025, 9, 18), snapshot.dueDate());
+
+        assertEquals("term-test-001", snapshot.periodExternalId());
 
         assertEquals(2, snapshot.grades().size());
 
@@ -177,7 +179,7 @@ class IdukayCourseActivitiesClientTest {
         IdukayActivityDto activity =
                 new IdukayActivityDto("activity-test-001", "Actividad sin fecha", null, null, List.of());
 
-        PlatformActivitySnapshot snapshot = IdukayActivityMapper.toSnapshot(activity, MAXIMUM_SCORE);
+        PlatformActivitySnapshot snapshot = IdukayActivityMapper.toSnapshot(activity, MAXIMUM_SCORE, null);
 
         assertEquals("activity-test-001", snapshot.externalId());
 
@@ -200,7 +202,7 @@ class IdukayCourseActivitiesClientTest {
                 null,
                 List.of(new IdukayActivityScoreDto("student-test-001", new BigDecimal("9.25"), null, null)));
 
-        PlatformActivitySnapshot snapshot = IdukayActivityMapper.toSnapshot(activity, MAXIMUM_SCORE);
+        PlatformActivitySnapshot snapshot = IdukayActivityMapper.toSnapshot(activity, MAXIMUM_SCORE, null);
 
         assertEquals(1, snapshot.grades().size());
 
@@ -223,7 +225,7 @@ class IdukayCourseActivitiesClientTest {
                 null,
                 List.of(new IdukayActivityScoreDto("student-001", null, null, null)));
 
-        PlatformActivitySnapshot snapshot = IdukayActivityMapper.toSnapshot(activity, MAXIMUM_SCORE);
+        PlatformActivitySnapshot snapshot = IdukayActivityMapper.toSnapshot(activity, MAXIMUM_SCORE, null);
 
         assertTrue(snapshot.grades().isEmpty());
     }

@@ -6,6 +6,7 @@ public record PlatformCourseSnapshot(
         String externalId,
         String name,
         String subject,
+        PlatformAcademicYearSnapshot academicYear,
         List<PlatformActivitySnapshot> activities,
         List<PlatformStudentSnapshot> students) {
 

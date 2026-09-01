@@ -15,15 +15,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AcademicSyncService {
 
+    private final AcademicCalendarSynchronizer academicCalendarSynchronizer;
     private final CourseRosterSynchronizer courseRosterSynchronizer;
     private final ActivityGradeSynchronizer activityGradeSynchronizer;
     private final SyncAlertSummaryService alertSummaryService;
 
     public AcademicSyncService(
+            AcademicCalendarSynchronizer academicCalendarSynchronizer,
             CourseRosterSynchronizer courseRosterSynchronizer,
             ActivityGradeSynchronizer activityGradeSynchronizer,
             SyncAlertSummaryService alertSummaryService) {
-
+        this.academicCalendarSynchronizer = academicCalendarSynchronizer;
         this.courseRosterSynchronizer = courseRosterSynchronizer;
         this.activityGradeSynchronizer = activityGradeSynchronizer;
         this.alertSummaryService = alertSummaryService;
@@ -86,11 +88,14 @@ public class AcademicSyncService {
     private AcademicSyncResult synchronizePlatformCourse(
             UUID institutionId, UUID teacherUserId, String platformCode, PlatformCourseSnapshot platformCourse) {
 
-        AcademicCourse course =
-                courseRosterSynchronizer.synchronize(institutionId, teacherUserId, platformCode, platformCourse);
+        AcademicCalendarSynchronizer.Result calendarResult =
+                academicCalendarSynchronizer.synchronize(institutionId, platformCode, platformCourse.academicYear());
 
-        ActivityGradeSynchronizer.Result processingResult =
-                activityGradeSynchronizer.synchronize(institutionId, platformCode, course, platformCourse);
+        AcademicCourse course = courseRosterSynchronizer.synchronize(
+                institutionId, teacherUserId, platformCode, platformCourse, calendarResult.academicYearId());
+
+        ActivityGradeSynchronizer.Result processingResult = activityGradeSynchronizer.synchronize(
+                institutionId, platformCode, course, platformCourse, calendarResult.periodIdsByExternalId());
 
         SyncAlertSummaryService.Summary alertSummary =
                 alertSummaryService.summarize(course.getId(), processingResult.activityIds());

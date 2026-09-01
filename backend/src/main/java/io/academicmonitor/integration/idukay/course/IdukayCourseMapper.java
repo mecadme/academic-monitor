@@ -29,7 +29,7 @@ public final class IdukayCourseMapper {
                 .map(IdukayCourseMapper::toStudentSnapshot)
                 .toList();
 
-        return new PlatformCourseSnapshot(externalId, name, subject, List.of(), students);
+        return new PlatformCourseSnapshot(externalId, name, subject, null, List.of(), students);
     }
 
     private static PlatformStudentSnapshot toStudentSnapshot(IdukayStudentDto student) {

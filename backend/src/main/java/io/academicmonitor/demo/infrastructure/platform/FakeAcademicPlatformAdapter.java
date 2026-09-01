@@ -3,6 +3,8 @@ package io.academicmonitor.demo.infrastructure.platform;
 import io.academicmonitor.academic.application.port.AcademicPlatformContext;
 import io.academicmonitor.academic.application.port.AcademicPlatformPort;
 import io.academicmonitor.academic.application.port.AcademicPlatformSnapshot;
+import io.academicmonitor.academic.application.port.PlatformAcademicPeriodSnapshot;
+import io.academicmonitor.academic.application.port.PlatformAcademicYearSnapshot;
 import io.academicmonitor.academic.application.port.PlatformActivitySnapshot;
 import io.academicmonitor.academic.application.port.PlatformCourseSnapshot;
 import io.academicmonitor.academic.application.port.PlatformGradeSnapshot;
@@ -17,6 +19,7 @@ final class FakeAcademicPlatformAdapter implements AcademicPlatformPort {
 
     private static final String COURSE_EXTERNAL_ID = "physics-1bgu-a";
     private static final String ACTIVITY_EXTERNAL_ID = "activity-mru-001";
+    private static final String PERIOD_EXTERNAL_ID = "period-2026-2027-1";
 
     private final DemoScenario scenario;
 
@@ -46,10 +49,21 @@ final class FakeAcademicPlatformAdapter implements AcademicPlatformPort {
                 "Movimiento rectilíneo",
                 new BigDecimal("10.00"),
                 LocalDate.of(2026, 9, 25),
+                PERIOD_EXTERNAL_ID,
                 grades);
 
-        PlatformCourseSnapshot course =
-                new PlatformCourseSnapshot(COURSE_EXTERNAL_ID, "1.º BGU A", "Física", List.of(activity), students);
+        PlatformAcademicPeriodSnapshot period =
+                new PlatformAcademicPeriodSnapshot(PERIOD_EXTERNAL_ID, "Primer período", "P1", 1);
+
+        PlatformAcademicYearSnapshot academicYear = new PlatformAcademicYearSnapshot(
+                "academic-year-2026-2027",
+                "Año lectivo 2026-2027",
+                "2026-2027",
+                new BigDecimal("10.00"),
+                List.of(period));
+
+        PlatformCourseSnapshot course = new PlatformCourseSnapshot(
+                COURSE_EXTERNAL_ID, "1.º BGU A", "Física", academicYear, List.of(activity), students);
 
         return new AcademicPlatformSnapshot(List.of(course));
     }

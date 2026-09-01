@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,8 @@ import io.academicmonitor.academic.application.port.AcademicPlatformContext;
 import io.academicmonitor.academic.application.port.AcademicPlatformFilter;
 import io.academicmonitor.academic.application.port.AcademicPlatformPort;
 import io.academicmonitor.academic.application.port.AcademicPlatformSnapshot;
+import io.academicmonitor.academic.application.port.PlatformAcademicPeriodSnapshot;
+import io.academicmonitor.academic.application.port.PlatformAcademicYearSnapshot;
 import io.academicmonitor.academic.application.port.PlatformActivitySnapshot;
 import io.academicmonitor.academic.application.port.PlatformCourseSnapshot;
 import io.academicmonitor.academic.application.port.PlatformGradeSnapshot;
@@ -37,6 +40,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,6 +62,10 @@ class AcademicSyncServiceTest {
     private static final UUID STUDENT_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
 
     private static final UUID ACTIVITY_ID = UUID.fromString("55555555-5555-5555-5555-555555555555");
+
+    private static final UUID ACADEMIC_YEAR_ID = UUID.fromString("88888888-8888-8888-8888-888888888888");
+
+    private static final UUID ACADEMIC_PERIOD_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
 
     private static final String PLATFORM = "TEST";
 
@@ -84,8 +92,20 @@ class AcademicSyncServiceTest {
 
     private AcademicSyncService service;
 
+    private AcademicCalendarSynchronizer academicCalendarSynchronizer;
+
     @BeforeEach
     void setUp() {
+
+        academicCalendarSynchronizer = mock(AcademicCalendarSynchronizer.class);
+
+        lenient()
+                .when(academicCalendarSynchronizer.synchronize(
+                        org.mockito.ArgumentMatchers.eq(INSTITUTION_ID),
+                        org.mockito.ArgumentMatchers.eq(PLATFORM),
+                        any(PlatformAcademicYearSnapshot.class)))
+                .thenReturn(new AcademicCalendarSynchronizer.Result(
+                        ACADEMIC_YEAR_ID, Map.of("period-001", ACADEMIC_PERIOD_ID)));
 
         CourseRosterSynchronizer courseRosterSynchronizer =
                 new CourseRosterSynchronizer(courseRepository, studentRepository, enrollmentRepository);
@@ -95,7 +115,8 @@ class AcademicSyncServiceTest {
 
         SyncAlertSummaryService alertSummaryService = new SyncAlertSummaryService(alertRepository);
 
-        service = new AcademicSyncService(courseRosterSynchronizer, activityGradeSynchronizer, alertSummaryService);
+        service = new AcademicSyncService(
+                academicCalendarSynchronizer, courseRosterSynchronizer, activityGradeSynchronizer, alertSummaryService);
     }
 
     @Test
@@ -168,6 +189,8 @@ class AcademicSyncServiceTest {
 
         assertEquals(TEACHER_ID, createdCourse.getTeacherUserId());
 
+        assertEquals(ACADEMIC_YEAR_ID, createdCourse.getAcademicYearId());
+
         assertEquals(PLATFORM, createdCourse.getPlatformCode());
 
         assertEquals("physics-1bgu-a", createdCourse.getExternalId());
@@ -199,6 +222,8 @@ class AcademicSyncServiceTest {
         Activity createdActivity = activityCaptor.getValue();
 
         assertEquals(COURSE_ID, createdActivity.getCourseId());
+
+        assertEquals(ACADEMIC_PERIOD_ID, createdActivity.getAcademicPeriodId());
 
         assertEquals("Movimiento rectilíneo", createdActivity.getName());
 
@@ -372,6 +397,7 @@ class AcademicSyncServiceTest {
         assertEquals("Academic platform returned no courses", exception.getMessage());
 
         verifyNoInteractions(
+                academicCalendarSynchronizer,
                 courseRepository,
                 studentRepository,
                 enrollmentRepository,
@@ -390,14 +416,18 @@ class AcademicSyncServiceTest {
 
         SyncAlertSummaryService alertSummaryService = mock(SyncAlertSummaryService.class);
 
-        AcademicSyncService orchestrationService =
-                new AcademicSyncService(courseRosterSynchronizer, activityGradeSynchronizer, alertSummaryService);
+        AcademicCalendarSynchronizer calendarSynchronizer = mock(AcademicCalendarSynchronizer.class);
+
+        AcademicSyncService orchestrationService = new AcademicSyncService(
+                calendarSynchronizer, courseRosterSynchronizer, activityGradeSynchronizer, alertSummaryService);
+
+        PlatformAcademicYearSnapshot academicYear = academicYear();
 
         PlatformCourseSnapshot firstPlatformCourse =
-                new PlatformCourseSnapshot("course-001", "Course 1", "Physics", List.of(), List.of());
+                new PlatformCourseSnapshot("course-001", "Course 1", "Physics", academicYear, List.of(), List.of());
 
         PlatformCourseSnapshot secondPlatformCourse =
-                new PlatformCourseSnapshot("course-002", "Course 2", "Chemistry", List.of(), List.of());
+                new PlatformCourseSnapshot("course-002", "Course 2", "Chemistry", academicYear, List.of(), List.of());
 
         AcademicPlatformSnapshot snapshot =
                 new AcademicPlatformSnapshot(List.of(firstPlatformCourse, secondPlatformCourse));
@@ -408,6 +438,12 @@ class AcademicSyncServiceTest {
 
         when(platform.fetchSnapshot(new AcademicPlatformContext(INSTITUTION_ID, TEACHER_ID), filter))
                 .thenReturn(snapshot);
+
+        AcademicCalendarSynchronizer.Result calendarResult =
+                new AcademicCalendarSynchronizer.Result(ACADEMIC_YEAR_ID, Map.of("period-001", ACADEMIC_PERIOD_ID));
+
+        when(calendarSynchronizer.synchronize(INSTITUTION_ID, PLATFORM, academicYear))
+                .thenReturn(calendarResult);
 
         AcademicCourse firstCourse = mock(AcademicCourse.class);
         AcademicCourse secondCourse = mock(AcademicCourse.class);
@@ -420,16 +456,28 @@ class AcademicSyncServiceTest {
         when(secondCourse.getId()).thenReturn(secondCourseId);
         when(secondCourse.getName()).thenReturn("Course 2");
 
-        when(courseRosterSynchronizer.synchronize(INSTITUTION_ID, TEACHER_ID, PLATFORM, firstPlatformCourse))
+        when(courseRosterSynchronizer.synchronize(
+                        INSTITUTION_ID, TEACHER_ID, PLATFORM, firstPlatformCourse, ACADEMIC_YEAR_ID))
                 .thenReturn(firstCourse);
 
-        when(courseRosterSynchronizer.synchronize(INSTITUTION_ID, TEACHER_ID, PLATFORM, secondPlatformCourse))
+        when(courseRosterSynchronizer.synchronize(
+                        INSTITUTION_ID, TEACHER_ID, PLATFORM, secondPlatformCourse, ACADEMIC_YEAR_ID))
                 .thenReturn(secondCourse);
 
-        when(activityGradeSynchronizer.synchronize(INSTITUTION_ID, PLATFORM, firstCourse, firstPlatformCourse))
+        when(activityGradeSynchronizer.synchronize(
+                        INSTITUTION_ID,
+                        PLATFORM,
+                        firstCourse,
+                        firstPlatformCourse,
+                        calendarResult.periodIdsByExternalId()))
                 .thenReturn(new ActivityGradeSynchronizer.Result(10, List.of(ACTIVITY_ID)));
 
-        when(activityGradeSynchronizer.synchronize(INSTITUTION_ID, PLATFORM, secondCourse, secondPlatformCourse))
+        when(activityGradeSynchronizer.synchronize(
+                        INSTITUTION_ID,
+                        PLATFORM,
+                        secondCourse,
+                        secondPlatformCourse,
+                        calendarResult.periodIdsByExternalId()))
                 .thenReturn(new ActivityGradeSynchronizer.Result(20, List.of(secondActivityId)));
 
         when(alertSummaryService.summarize(COURSE_ID, List.of(ACTIVITY_ID)))
@@ -462,13 +510,22 @@ class AcademicSyncServiceTest {
                 "Movimiento rectilíneo",
                 new BigDecimal("10.00"),
                 LocalDate.of(2026, 9, 25),
+                "period-001",
                 List.of(grade));
 
         PlatformCourseSnapshot course = new PlatformCourseSnapshot(
-                "physics-1bgu-a", "1.º BGU A", "Física", List.of(activity), List.of(student));
+                "physics-1bgu-a", "1.º BGU A", "Física", academicYear(), List.of(activity), List.of(student));
 
         AcademicPlatformSnapshot snapshot = new AcademicPlatformSnapshot(List.of(course));
 
         return context -> snapshot;
+    }
+
+    private static PlatformAcademicYearSnapshot academicYear() {
+        PlatformAcademicPeriodSnapshot period =
+                new PlatformAcademicPeriodSnapshot("period-001", "First period", "P1", 1);
+
+        return new PlatformAcademicYearSnapshot(
+                "academic-year-001", "Academic year", "2026-2027", new BigDecimal("10.00"), List.of(period));
     }
 }

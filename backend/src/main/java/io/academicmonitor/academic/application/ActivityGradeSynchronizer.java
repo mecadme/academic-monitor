@@ -13,6 +13,7 @@ import io.academicmonitor.academic.domain.StudentRepository;
 import io.academicmonitor.monitoring.application.AlertEvaluationService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -37,7 +38,11 @@ public class ActivityGradeSynchronizer {
     }
 
     Result synchronize(
-            UUID institutionId, String platformCode, AcademicCourse course, PlatformCourseSnapshot platformCourse) {
+            UUID institutionId,
+            String platformCode,
+            AcademicCourse course,
+            PlatformCourseSnapshot platformCourse,
+            Map<String, UUID> periodIdsByExternalId) {
 
         int gradesProcessed = 0;
 
@@ -45,7 +50,9 @@ public class ActivityGradeSynchronizer {
 
         for (PlatformActivitySnapshot platformActivity : platformCourse.activities()) {
 
-            Activity activity = synchronizeActivity(platformCode, course, platformActivity);
+            UUID academicPeriodId = resolveAcademicPeriodId(platformActivity, periodIdsByExternalId);
+
+            Activity activity = synchronizeActivity(platformCode, course, platformActivity, academicPeriodId);
 
             activityIds.add(activity.getId());
 
@@ -61,17 +68,46 @@ public class ActivityGradeSynchronizer {
     }
 
     private Activity synchronizeActivity(
-            String platformCode, AcademicCourse course, PlatformActivitySnapshot platformActivity) {
+            String platformCode,
+            AcademicCourse course,
+            PlatformActivitySnapshot platformActivity,
+            UUID academicPeriodId) {
 
         return activityRepository
                 .findByCourseIdAndPlatformCodeAndExternalId(course.getId(), platformCode, platformActivity.externalId())
+                .map(existing -> associateAcademicPeriod(existing, academicPeriodId))
                 .orElseGet(() -> activityRepository.save(new Activity(
                         course.getId(),
+                        academicPeriodId,
                         platformCode,
                         platformActivity.externalId(),
                         platformActivity.name(),
                         platformActivity.maximumScore(),
                         platformActivity.dueDate())));
+    }
+
+    private Activity associateAcademicPeriod(Activity activity, UUID academicPeriodId) {
+        if (activity.associateAcademicPeriod(academicPeriodId)) {
+            return activityRepository.save(activity);
+        }
+        return activity;
+    }
+
+    private static UUID resolveAcademicPeriodId(
+            PlatformActivitySnapshot platformActivity, Map<String, UUID> periodIdsByExternalId) {
+        String periodExternalId = platformActivity.periodExternalId();
+
+        if (periodExternalId == null || periodExternalId.isBlank()) {
+            return null;
+        }
+
+        UUID academicPeriodId = periodIdsByExternalId.get(periodExternalId);
+        if (academicPeriodId == null) {
+            throw new IllegalStateException("Activity " + platformActivity.externalId()
+                    + " references an unknown academic period: " + periodExternalId);
+        }
+
+        return academicPeriodId;
     }
 
     private void synchronizeGrade(
