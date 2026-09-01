@@ -22,6 +22,9 @@ public class Activity {
     @Column(name = "course_id", nullable = false, updatable = false)
     private UUID courseId;
 
+    @Column(name = "academic_period_id")
+    private UUID academicPeriodId;
+
     @Column(name = "platform_code", nullable = false, length = 32)
     private String platformCode;
 
@@ -52,12 +55,14 @@ public class Activity {
 
     public Activity(
             UUID courseId,
+            UUID academicPeriodId,
             String platformCode,
             String externalId,
             String name,
             BigDecimal maxScore,
             LocalDate dueDate) {
         this.courseId = courseId;
+        this.academicPeriodId = academicPeriodId;
         this.platformCode = platformCode;
         this.externalId = externalId;
         this.name = name;
@@ -73,6 +78,14 @@ public class Activity {
         return courseId;
     }
 
+    public UUID getAcademicPeriodId() {
+        return academicPeriodId;
+    }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
     public String getName() {
         return name;
     }
@@ -83,5 +96,23 @@ public class Activity {
 
     public LocalDate getDueDate() {
         return dueDate;
+    }
+
+    public boolean associateAcademicPeriod(UUID expectedAcademicPeriodId) {
+        if (expectedAcademicPeriodId == null) {
+            return false;
+        }
+
+        if (academicPeriodId == null) {
+            academicPeriodId = expectedAcademicPeriodId;
+            return true;
+        }
+
+        if (!academicPeriodId.equals(expectedAcademicPeriodId)) {
+            throw new IllegalStateException(
+                    "Activity " + externalId + " is already associated with a different academic period");
+        }
+
+        return false;
     }
 }

@@ -24,6 +24,9 @@ public class AcademicCourse {
     @Column(name = "teacher_user_id", nullable = false, updatable = false)
     private UUID teacherUserId;
 
+    @Column(name = "academic_year_id")
+    private UUID academicYearId;
+
     @Column(name = "platform_code", nullable = false, length = 32)
     private String platformCode;
 
@@ -55,12 +58,14 @@ public class AcademicCourse {
     public AcademicCourse(
             UUID institutionId,
             UUID teacherUserId,
+            UUID academicYearId,
             String platformCode,
             String externalId,
             String name,
             String subject) {
         this.institutionId = requireId(institutionId);
         this.teacherUserId = requireId(teacherUserId);
+        this.academicYearId = requireId(academicYearId);
         this.platformCode = requireText(platformCode, "platformCode");
         this.externalId = requireText(externalId, "externalId");
         this.name = requireText(name, "name");
@@ -87,6 +92,10 @@ public class AcademicCourse {
         return teacherUserId;
     }
 
+    public UUID getAcademicYearId() {
+        return academicYearId;
+    }
+
     public String getPlatformCode() {
         return platformCode;
     }
@@ -109,6 +118,22 @@ public class AcademicCourse {
 
     public boolean isActive() {
         return active;
+    }
+
+    public boolean associateAcademicYear(UUID expectedAcademicYearId) {
+        UUID requiredAcademicYearId = requireId(expectedAcademicYearId);
+
+        if (academicYearId == null) {
+            academicYearId = requiredAcademicYearId;
+            return true;
+        }
+
+        if (!academicYearId.equals(requiredAcademicYearId)) {
+            throw new IllegalStateException(
+                    "Course " + externalId + " is already associated with a different academic year");
+        }
+
+        return false;
     }
 
     private static UUID requireId(UUID value) {

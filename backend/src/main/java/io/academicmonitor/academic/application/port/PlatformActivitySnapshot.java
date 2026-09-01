@@ -9,6 +9,7 @@ public record PlatformActivitySnapshot(
         String name,
         BigDecimal maximumScore,
         LocalDate dueDate,
+        String periodExternalId,
         List<PlatformGradeSnapshot> grades) {
 
     public PlatformActivitySnapshot {

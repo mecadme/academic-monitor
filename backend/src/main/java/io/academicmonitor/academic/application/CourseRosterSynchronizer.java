@@ -29,9 +29,14 @@ public class CourseRosterSynchronizer {
     }
 
     AcademicCourse synchronize(
-            UUID institutionId, UUID teacherUserId, String platformCode, PlatformCourseSnapshot platformCourse) {
+            UUID institutionId,
+            UUID teacherUserId,
+            String platformCode,
+            PlatformCourseSnapshot platformCourse,
+            UUID academicYearId) {
 
-        AcademicCourse course = synchronizeCourse(institutionId, teacherUserId, platformCode, platformCourse);
+        AcademicCourse course =
+                synchronizeCourse(institutionId, teacherUserId, platformCode, platformCourse, academicYearId);
 
         synchronizeStudents(institutionId, platformCode, course, platformCourse);
 
@@ -39,15 +44,21 @@ public class CourseRosterSynchronizer {
     }
 
     private AcademicCourse synchronizeCourse(
-            UUID institutionId, UUID teacherUserId, String platformCode, PlatformCourseSnapshot platformCourse) {
+            UUID institutionId,
+            UUID teacherUserId,
+            String platformCode,
+            PlatformCourseSnapshot platformCourse,
+            UUID academicYearId) {
 
         return courseRepository
                 .findByInstitutionIdAndPlatformCodeAndExternalId(
                         institutionId, platformCode, platformCourse.externalId())
+                .map(existing -> associateAcademicYear(existing, academicYearId))
                 .orElseGet(() -> {
                     AcademicCourse created = new AcademicCourse(
                             institutionId,
                             teacherUserId,
+                            academicYearId,
                             platformCode,
                             platformCourse.externalId(),
                             platformCourse.name(),
@@ -57,6 +68,13 @@ public class CourseRosterSynchronizer {
 
                     return courseRepository.save(created);
                 });
+    }
+
+    private AcademicCourse associateAcademicYear(AcademicCourse course, UUID academicYearId) {
+        if (course.associateAcademicYear(academicYearId)) {
+            return courseRepository.save(course);
+        }
+        return course;
     }
 
     private void synchronizeStudents(

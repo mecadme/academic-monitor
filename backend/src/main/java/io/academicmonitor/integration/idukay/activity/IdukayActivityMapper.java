@@ -13,7 +13,8 @@ public final class IdukayActivityMapper {
 
     private IdukayActivityMapper() {}
 
-    public static PlatformActivitySnapshot toSnapshot(IdukayActivityDto activity, BigDecimal maximumScore) {
+    public static PlatformActivitySnapshot toSnapshot(
+            IdukayActivityDto activity, BigDecimal maximumScore, String periodExternalId) {
 
         if (activity == null) {
             throw new IllegalArgumentException("activity is required");
@@ -38,7 +39,7 @@ public final class IdukayActivityMapper {
                 .map(IdukayActivityMapper::toGradeSnapshot)
                 .toList();
 
-        return new PlatformActivitySnapshot(externalId, name, maximumScore, activityDate, grades);
+        return new PlatformActivitySnapshot(externalId, name, maximumScore, activityDate, periodExternalId, grades);
     }
 
     private static PlatformGradeSnapshot toGradeSnapshot(IdukayActivityScoreDto score) {
