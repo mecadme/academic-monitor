@@ -1,5 +1,7 @@
 package io.academicmonitor.academic.domain;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,4 +13,6 @@ public interface StudentRepository {
             UUID institutionId, String platformCode, String externalId);
 
     Optional<Student> findStudentById(UUID studentId);
+
+    List<Student> findByInstitutionIdAndIdIn(UUID institutionId, Collection<UUID> studentIds);
 }

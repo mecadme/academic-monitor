@@ -82,6 +82,10 @@ public class Alert {
         return id;
     }
 
+    public UUID getInstitutionId() {
+        return institutionId;
+    }
+
     public UUID getCourseId() {
         return courseId;
     }
@@ -92,6 +96,10 @@ public class Alert {
 
     public UUID getStudentId() {
         return studentId;
+    }
+
+    public String getRuleCode() {
+        return ruleCode;
     }
 
     public AlertSeverity getSeverity() {
