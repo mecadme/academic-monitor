@@ -48,4 +48,9 @@ class AcademicCalendarRepositoryAdapter implements AcademicYearRepository, Acade
     public Optional<AcademicPeriod> findByAcademicYearIdAndExternalId(UUID academicYearId, String externalId) {
         return academicPeriodRepository.findByAcademicYearIdAndExternalId(academicYearId, externalId);
     }
+
+    @Override
+    public List<AcademicPeriod> findByAcademicYearIdIn(Collection<UUID> academicYearIds) {
+        return academicPeriodRepository.findByAcademicYearIdIn(academicYearIds);
+    }
 }

@@ -179,6 +179,8 @@ class AcademicSyncServiceTest {
 
         assertEquals(0, result.critical());
 
+        assertEquals(null, result.academicPeriodId());
+
         ArgumentCaptor<AcademicCourse> courseCaptor = ArgumentCaptor.forClass(AcademicCourse.class);
 
         verify(courseRepository).save(courseCaptor.capture());
@@ -434,7 +436,7 @@ class AcademicSyncServiceTest {
 
         AcademicPlatformPort platform = mock(AcademicPlatformPort.class);
 
-        AcademicPlatformFilter filter = new AcademicPlatformFilter("period-t1");
+        AcademicPlatformFilter filter = new AcademicPlatformFilter("period-001");
 
         when(platform.fetchSnapshot(new AcademicPlatformContext(INSTITUTION_ID, TEACHER_ID), filter))
                 .thenReturn(snapshot);
@@ -494,6 +496,7 @@ class AcademicSyncServiceTest {
         assertEquals(7, result.openAlerts());
         assertEquals(4, result.warnings());
         assertEquals(3, result.critical());
+        assertEquals(ACADEMIC_PERIOD_ID, result.academicPeriodId());
 
         verify(platform).fetchSnapshot(new AcademicPlatformContext(INSTITUTION_ID, TEACHER_ID), filter);
     }

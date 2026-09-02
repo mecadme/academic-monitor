@@ -22,7 +22,8 @@ public class AlertInboxController {
     public AlertInboxResponse alerts(
             @RequestParam UUID institutionId,
             @RequestParam UUID teacherUserId,
-            @RequestParam(required = false) UUID courseId) {
-        return alertInboxQueryService.getInbox(institutionId, teacherUserId, courseId);
+            @RequestParam(required = false) UUID courseId,
+            @RequestParam(required = false) UUID academicPeriodId) {
+        return alertInboxQueryService.getInbox(institutionId, teacherUserId, courseId, academicPeriodId);
     }
 }

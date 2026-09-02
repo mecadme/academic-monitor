@@ -76,6 +76,7 @@ const periodsResponse = {
 };
 
 const syncResponse = {
+  academicPeriodId: 'academic-period-t1',
   coursesProcessed: 13,
   gradesProcessed: 2500,
   openAlerts: 230,
@@ -327,7 +328,7 @@ describe(
 
         expect(
           onSyncSuccess,
-        ).toHaveBeenCalledTimes(1);
+        ).toHaveBeenCalledWith(syncResponse);
       },
     );
   },

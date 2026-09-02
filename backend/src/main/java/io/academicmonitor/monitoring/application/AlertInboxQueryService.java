@@ -2,6 +2,8 @@ package io.academicmonitor.monitoring.application;
 
 import io.academicmonitor.academic.domain.AcademicCourse;
 import io.academicmonitor.academic.domain.AcademicCourseRepository;
+import io.academicmonitor.academic.domain.AcademicPeriod;
+import io.academicmonitor.academic.domain.AcademicPeriodRepository;
 import io.academicmonitor.academic.domain.Activity;
 import io.academicmonitor.academic.domain.ActivityRepository;
 import io.academicmonitor.academic.domain.Student;
@@ -34,16 +36,19 @@ public class AlertInboxQueryService {
             .thenComparing(AlertInboxResponse.AlertItem::id);
 
     private final AcademicCourseRepository courseRepository;
+    private final AcademicPeriodRepository academicPeriodRepository;
     private final AlertRepository alertRepository;
     private final ActivityRepository activityRepository;
     private final StudentRepository studentRepository;
 
     public AlertInboxQueryService(
             AcademicCourseRepository courseRepository,
+            AcademicPeriodRepository academicPeriodRepository,
             AlertRepository alertRepository,
             ActivityRepository activityRepository,
             StudentRepository studentRepository) {
         this.courseRepository = courseRepository;
+        this.academicPeriodRepository = academicPeriodRepository;
         this.alertRepository = alertRepository;
         this.activityRepository = activityRepository;
         this.studentRepository = studentRepository;
@@ -51,11 +56,20 @@ public class AlertInboxQueryService {
 
     @Transactional(readOnly = true)
     public AlertInboxResponse getInbox(UUID institutionId, UUID teacherUserId, UUID courseId) {
+        return getInbox(institutionId, teacherUserId, courseId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public AlertInboxResponse getInbox(UUID institutionId, UUID teacherUserId, UUID courseId, UUID academicPeriodId) {
         Objects.requireNonNull(institutionId, "institutionId is required");
         Objects.requireNonNull(teacherUserId, "teacherUserId is required");
 
         List<AcademicCourse> allowedCourses =
                 courseRepository.findByInstitutionIdAndTeacherUserId(institutionId, teacherUserId);
+
+        if (!isAllowedPeriod(allowedCourses, academicPeriodId)) {
+            return emptyInbox(institutionId, teacherUserId);
+        }
 
         List<AcademicCourse> selectedCourses = selectCourses(allowedCourses, courseId);
 
@@ -89,6 +103,8 @@ public class AlertInboxQueryService {
         Map<UUID, Activity> activitiesById = indexById(
                 activityRepository.findActivitiesByCourseIdIn(courseIds).stream()
                         .filter(activity -> coursesById.containsKey(activity.getCourseId()))
+                        .filter(activity ->
+                                academicPeriodId == null || academicPeriodId.equals(activity.getAcademicPeriodId()))
                         .toList(),
                 Activity::getId);
 
@@ -106,6 +122,26 @@ public class AlertInboxQueryService {
                 .toList();
 
         return new AlertInboxResponse(institutionId, teacherUserId, items.size(), items);
+    }
+
+    private boolean isAllowedPeriod(List<AcademicCourse> allowedCourses, UUID academicPeriodId) {
+        if (academicPeriodId == null) {
+            return true;
+        }
+
+        Set<UUID> academicYearIds = allowedCourses.stream()
+                .map(AcademicCourse::getAcademicYearId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
+
+        if (academicYearIds.isEmpty()) {
+            return false;
+        }
+
+        return academicPeriodRepository.findByAcademicYearIdIn(academicYearIds).stream()
+                .filter(period -> academicYearIds.contains(period.getAcademicYearId()))
+                .map(AcademicPeriod::getId)
+                .anyMatch(academicPeriodId::equals);
     }
 
     private static List<AcademicCourse> selectCourses(List<AcademicCourse> allowedCourses, UUID courseId) {

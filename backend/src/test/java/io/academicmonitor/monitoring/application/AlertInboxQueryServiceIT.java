@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.academicmonitor.academic.domain.AcademicCourse;
 import io.academicmonitor.academic.domain.AcademicCourseRepository;
+import io.academicmonitor.academic.domain.AcademicPeriod;
+import io.academicmonitor.academic.domain.AcademicPeriodRepository;
 import io.academicmonitor.academic.domain.AcademicYear;
 import io.academicmonitor.academic.domain.AcademicYearRepository;
 import io.academicmonitor.academic.domain.Activity;
@@ -42,6 +44,9 @@ class AlertInboxQueryServiceIT extends PostgresIntegrationTest {
     private AcademicCourseRepository courseRepository;
 
     @Autowired
+    private AcademicPeriodRepository academicPeriodRepository;
+
+    @Autowired
     private StudentRepository studentRepository;
 
     @Autowired
@@ -70,6 +75,21 @@ class AlertInboxQueryServiceIT extends PostgresIntegrationTest {
                 "2025 - 2026",
                 "2025-2026",
                 new BigDecimal("10.00")));
+        AcademicYear otherTeacherAcademicYear = academicYearRepository.save(new AcademicYear(
+                institution.getId(),
+                "TEST",
+                "other-teacher-alert-year",
+                "Other teacher year",
+                "2024-2025",
+                new BigDecimal("10.00")));
+        AcademicPeriod periodT1 = academicPeriodRepository.save(
+                new AcademicPeriod(academicYear.getId(), "period-t1", "Primer trimestre", "T1", 1));
+        AcademicPeriod periodT2 = academicPeriodRepository.save(
+                new AcademicPeriod(academicYear.getId(), "period-t2", "Segundo trimestre", "T2", 2));
+        AcademicPeriod foreignPeriod = academicPeriodRepository.save(
+                new AcademicPeriod(otherAcademicYear.getId(), "foreign-period", "Foreign period", "FP", 1));
+        AcademicPeriod otherTeacherPeriod = academicPeriodRepository.save(new AcademicPeriod(
+                otherTeacherAcademicYear.getId(), "other-teacher-period", "Other teacher period", "OTP", 1));
 
         AcademicCourse physics = saveCourse(
                 institution,
@@ -93,7 +113,12 @@ class AlertInboxQueryServiceIT extends PostgresIntegrationTest {
                 "Hidden institution course",
                 "Matemática");
         AcademicCourse otherTeacherCourse = saveCourse(
-                institution, otherTeacher, academicYear, "other-teacher-course", "Hidden teacher course", "Biología");
+                institution,
+                otherTeacher,
+                otherTeacherAcademicYear,
+                "other-teacher-course",
+                "Hidden teacher course",
+                "Biología");
 
         Student ana = saveStudent(institution, "student-ana", "Ana", "Torres");
         Student bruno = saveStudent(institution, "student-bruno", "Bruno", "Vega");
@@ -101,12 +126,12 @@ class AlertInboxQueryServiceIT extends PostgresIntegrationTest {
                 saveStudent(otherInstitution, "student-hidden-institution", "Hidden", "Institution");
         Student hiddenTeacherStudent = saveStudent(institution, "student-hidden-teacher", "Hidden", "Teacher");
 
-        Activity physicsActivity = saveActivity(physics, "physics-activity", "Movimiento rectilíneo");
-        Activity chemistryActivity = saveActivity(chemistry, "chemistry-activity", "Enlaces químicos");
-        Activity otherInstitutionActivity =
-                saveActivity(otherInstitutionCourse, "hidden-institution-activity", "Hidden institution activity");
-        Activity otherTeacherActivity =
-                saveActivity(otherTeacherCourse, "hidden-teacher-activity", "Hidden teacher activity");
+        Activity physicsActivity = saveActivity(physics, periodT1, "physics-activity", "Movimiento rectilíneo");
+        Activity chemistryActivity = saveActivity(chemistry, periodT2, "chemistry-activity", "Enlaces químicos");
+        Activity otherInstitutionActivity = saveActivity(
+                otherInstitutionCourse, foreignPeriod, "hidden-institution-activity", "Hidden institution activity");
+        Activity otherTeacherActivity = saveActivity(
+                otherTeacherCourse, otherTeacherPeriod, "hidden-teacher-activity", "Hidden teacher activity");
 
         alertRepository.save(alert(institution, chemistry, chemistryActivity, bruno, AlertSeverity.CRITICAL, "4.50"));
         alertRepository.save(alert(institution, physics, physicsActivity, ana, AlertSeverity.WARNING, "6.50"));
@@ -164,6 +189,26 @@ class AlertInboxQueryServiceIT extends PostgresIntegrationTest {
                 service.getInbox(institution.getId(), teacher.getId(), otherTeacherCourse.getId());
         assertEquals(0, foreignFilter.total());
         assertEquals(0, foreignFilter.alerts().size());
+
+        AlertInboxResponse t1 = service.getInbox(institution.getId(), teacher.getId(), null, periodT1.getId());
+        assertEquals(1, t1.total());
+        assertEquals(physics.getId(), t1.alerts().getFirst().course().id());
+
+        AlertInboxResponse t2 = service.getInbox(institution.getId(), teacher.getId(), null, periodT2.getId());
+        assertEquals(1, t2.total());
+        assertEquals(chemistry.getId(), t2.alerts().getFirst().course().id());
+
+        AlertInboxResponse composed =
+                service.getInbox(institution.getId(), teacher.getId(), physics.getId(), periodT2.getId());
+        assertEquals(0, composed.total());
+
+        AlertInboxResponse foreignPeriodFilter =
+                service.getInbox(institution.getId(), teacher.getId(), null, foreignPeriod.getId());
+        assertEquals(0, foreignPeriodFilter.total());
+
+        AlertInboxResponse otherTeacherPeriodFilter =
+                service.getInbox(institution.getId(), teacher.getId(), null, otherTeacherPeriod.getId());
+        assertEquals(0, otherTeacherPeriodFilter.total());
     }
 
     private AcademicCourse saveCourse(
@@ -181,9 +226,15 @@ class AlertInboxQueryServiceIT extends PostgresIntegrationTest {
         return studentRepository.save(new Student(institution.getId(), "TEST", externalId, firstName, lastName));
     }
 
-    private Activity saveActivity(AcademicCourse course, String externalId, String name) {
+    private Activity saveActivity(AcademicCourse course, AcademicPeriod period, String externalId, String name) {
         return activityRepository.save(new Activity(
-                course.getId(), null, "TEST", externalId, name, new BigDecimal("10.00"), LocalDate.of(2026, 1, 15)));
+                course.getId(),
+                period.getId(),
+                "TEST",
+                externalId,
+                name,
+                new BigDecimal("10.00"),
+                LocalDate.of(2026, 1, 15)));
     }
 
     private static Alert alert(

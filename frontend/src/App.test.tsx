@@ -66,11 +66,47 @@ const dashboardResponse = {
 };
 
 const idukaySyncResponse = {
+  academicPeriodId: 'academic-period-t1',
   coursesProcessed: 13,
   gradesProcessed: 2500,
   openAlerts: 230,
   warnings: 160,
   critical: 70,
+};
+
+const academicPeriodsResponse = {
+  institutionId: 'context-institution',
+  teacherUserId: 'context-teacher',
+  periods: [
+    {
+      id: 'academic-period-t1',
+      name: 'Primer trimestre',
+      abbreviation: 'T1',
+      order: 1,
+      synchronized: true,
+    },
+    {
+      id: 'academic-period-t2',
+      name: 'Segundo trimestre',
+      abbreviation: 'T2',
+      order: 2,
+      synchronized: false,
+    },
+    {
+      id: 'academic-period-t3',
+      name: 'Tercer trimestre',
+      abbreviation: 'T3',
+      order: 3,
+      synchronized: false,
+    },
+  ],
+};
+
+const alertInboxResponse = {
+  institutionId: 'context-institution',
+  teacherUserId: 'context-teacher',
+  total: 0,
+  alerts: [],
 };
 
 describe('App', () => {
@@ -104,7 +140,9 @@ describe('App', () => {
       }),
     ).toBeInTheDocument();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(
         '/api/v1/context/bootstrap',
@@ -119,6 +157,22 @@ describe('App', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(
         '/api/v1/dashboard?institutionId=context-institution&teacherUserId=context-teacher',
+      ),
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '/api/v1/academic-periods?institutionId=context-institution&teacherUserId=context-teacher',
+      ),
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '/api/v1/alerts?institutionId=context-institution&teacherUserId=context-teacher&academicPeriodId=academic-period-t1',
       ),
       expect.objectContaining({
         method: 'GET',
@@ -180,7 +234,7 @@ describe('App', () => {
     );
   });
 
-  it('refreshes the academic dashboard after a successful Idukay sync', async () => {
+  it('refreshes the dashboard and alert inbox after a successful Idukay sync', async () => {
     const user = userEvent.setup();
     const fetchMock = createFetchMock();
     vi.stubGlobal('fetch', fetchMock);
@@ -202,6 +256,18 @@ describe('App', () => {
           String(url).includes('/api/v1/dashboard?'),
       );
       expect(dashboardCalls).toHaveLength(2);
+
+      const alertCalls = fetchMock.mock.calls.filter(
+        ([url]) =>
+          String(url).includes('/api/v1/alerts?'),
+      );
+      expect(alertCalls).toHaveLength(2);
+
+      const periodCalls = fetchMock.mock.calls.filter(
+        ([url]) =>
+          String(url).includes('/api/v1/academic-periods?'),
+      );
+      expect(periodCalls).toHaveLength(2);
     });
 
     const syncCall = fetchMock.mock.calls.find(([url]) =>
@@ -215,6 +281,176 @@ describe('App', () => {
     expect(String(syncCall?.[0])).toContain(
       'teacherUserId=context-teacher',
     );
+  });
+
+  it('defaults to the synchronized period with the highest order', async () => {
+    const fetchMock = createFetchMock({
+      academicPeriods: {
+        ...academicPeriodsResponse,
+        periods: academicPeriodsResponse.periods.map((period) => ({
+          ...period,
+          synchronized:
+            period.id === 'academic-period-t1' ||
+            period.id === 'academic-period-t2',
+        })),
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    const periodFilter = await screen.findByLabelText('Período');
+    await waitFor(() => {
+      expect(periodFilter).toHaveValue('academic-period-t2');
+    });
+
+    const alertCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes('/api/v1/alerts?'),
+    );
+    expect(String(alertCalls.at(-1)?.[0])).toContain(
+      'academicPeriodId=academic-period-t2',
+    );
+  });
+
+  it('defaults to all periods when none have synchronized activities', async () => {
+    const fetchMock = createFetchMock({
+      academicPeriods: {
+        ...academicPeriodsResponse,
+        periods: academicPeriodsResponse.periods.map((period) => ({
+          ...period,
+          synchronized: false,
+        })),
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    const periodFilter = await screen.findByLabelText('Período');
+    expect(periodFilter).toHaveValue('');
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(
+          ([url]) =>
+            String(url).includes('/api/v1/alerts?') &&
+            !String(url).includes('academicPeriodId='),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('uses internal period IDs and composes them with the course filter', async () => {
+    const user = userEvent.setup();
+    const fetchMock = createFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    await screen.findByText('1.º BGU A');
+    await user.selectOptions(
+      screen.getByLabelText('Curso'),
+      'course-2',
+    );
+    await user.selectOptions(
+      screen.getByLabelText('Período'),
+      'academic-period-t2',
+    );
+
+    await waitFor(() => {
+      const alertCalls = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/api/v1/alerts?'),
+      );
+      expect(String(alertCalls.at(-1)?.[0])).toContain(
+        'courseId=course-2&academicPeriodId=academic-period-t2',
+      );
+    });
+
+    await user.selectOptions(
+      screen.getByLabelText('Período'),
+      '',
+    );
+    await waitFor(() => {
+      const alertCalls = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/api/v1/alerts?'),
+      );
+      expect(String(alertCalls.at(-1)?.[0])).not.toContain(
+        'academicPeriodId=',
+      );
+    });
+  });
+
+  it('switches from T3 to the internal T1 returned by a T1 synchronization', async () => {
+    const user = userEvent.setup();
+    const fetchMock = createFetchMock({
+      academicPeriods: {
+        ...academicPeriodsResponse,
+        periods: academicPeriodsResponse.periods.map((period) => ({
+          ...period,
+          synchronized: true,
+        })),
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    const alertPeriodFilter = await screen.findByLabelText('Período');
+    await waitFor(() => {
+      expect(alertPeriodFilter).toHaveValue('academic-period-t3');
+    });
+    await connectIdukay(user);
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Sincronizar T1',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(alertPeriodFilter).toHaveValue('academic-period-t1');
+      const alertCalls = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/api/v1/alerts?'),
+      );
+      expect(String(alertCalls.at(-1)?.[0])).toContain(
+        'academicPeriodId=academic-period-t1',
+      );
+    });
+  });
+
+  it('switches the inbox to the exact internal period returned by a T2 synchronization', async () => {
+    const user = userEvent.setup();
+    const fetchMock = createFetchMock({
+      syncAcademicPeriodId: 'academic-period-t2',
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    await screen.findByText('1.º BGU A');
+    await connectIdukay(user);
+    await user.selectOptions(
+      screen.getByLabelText('Período a sincronizar'),
+      'period-t2',
+    );
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Sincronizar T2',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Período')).toHaveValue(
+        'academic-period-t2',
+      );
+      const alertCalls = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/api/v1/alerts?'),
+      );
+      expect(String(alertCalls.at(-1)?.[0])).toContain(
+        'academicPeriodId=academic-period-t2',
+      );
+      expect(String(alertCalls.at(-1)?.[0])).not.toContain(
+        'academicPeriodId=academic-period-t1',
+      );
+    });
   });
 
   it('shows a neutral context bootstrap failure', async () => {
@@ -257,6 +493,8 @@ async function connectIdukay(
 function createFetchMock(
   options: {
     contextFails?: boolean;
+    academicPeriods?: typeof academicPeriodsResponse;
+    syncAcademicPeriodId?: string;
   } = {},
 ) {
   return vi.fn(
@@ -282,6 +520,21 @@ function createFetchMock(
         return {
           ok: true,
           json: async () => dashboardResponse,
+        } as Response;
+      }
+
+      if (url.includes('/api/v1/academic-periods')) {
+        return {
+          ok: true,
+          json: async () =>
+            options.academicPeriods ?? academicPeriodsResponse,
+        } as Response;
+      }
+
+      if (url.includes('/api/v1/alerts')) {
+        return {
+          ok: true,
+          json: async () => alertInboxResponse,
         } as Response;
       }
 
@@ -315,6 +568,16 @@ function createFetchMock(
                 name: 'Trimestre 1',
                 abbreviation: 'T1',
               },
+              {
+                id: 'period-t2',
+                name: 'Trimestre 2',
+                abbreviation: 'T2',
+              },
+              {
+                id: 'period-t3',
+                name: 'Trimestre 3',
+                abbreviation: 'T3',
+              },
             ],
           }),
         } as Response;
@@ -327,7 +590,12 @@ function createFetchMock(
       ) {
         return {
           ok: true,
-          json: async () => idukaySyncResponse,
+          json: async () => ({
+            ...idukaySyncResponse,
+            academicPeriodId:
+              options.syncAcademicPeriodId ??
+              idukaySyncResponse.academicPeriodId,
+          }),
         } as Response;
       }
 

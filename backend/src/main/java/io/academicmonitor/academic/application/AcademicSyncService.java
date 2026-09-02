@@ -46,11 +46,13 @@ public class AcademicSyncService {
             AcademicPlatformPort platform,
             AcademicPlatformFilter filter) {
 
-        AcademicPlatformSnapshot snapshot = fetchSnapshot(institutionId, teacherUserId, platformCode, platform, filter);
+        AcademicPlatformFilter effectiveFilter = effectiveFilter(filter);
+        AcademicPlatformSnapshot snapshot =
+                fetchSnapshot(institutionId, teacherUserId, platformCode, platform, effectiveFilter);
 
         PlatformCourseSnapshot platformCourse = resolveSingleCourse(snapshot);
 
-        return synchronizePlatformCourse(institutionId, teacherUserId, platformCode, platformCourse);
+        return synchronizePlatformCourse(institutionId, teacherUserId, platformCode, platformCourse, effectiveFilter);
     }
 
     @Transactional
@@ -68,7 +70,9 @@ public class AcademicSyncService {
             AcademicPlatformPort platform,
             AcademicPlatformFilter filter) {
 
-        AcademicPlatformSnapshot snapshot = fetchSnapshot(institutionId, teacherUserId, platformCode, platform, filter);
+        AcademicPlatformFilter effectiveFilter = effectiveFilter(filter);
+        AcademicPlatformSnapshot snapshot =
+                fetchSnapshot(institutionId, teacherUserId, platformCode, platform, effectiveFilter);
 
         validateSnapshot(snapshot);
 
@@ -76,17 +80,23 @@ public class AcademicSyncService {
 
         for (PlatformCourseSnapshot platformCourse : snapshot.courses()) {
 
-            AcademicSyncResult result =
-                    synchronizePlatformCourse(institutionId, teacherUserId, platformCode, platformCourse);
+            AcademicSyncResult result = synchronizePlatformCourse(
+                    institutionId, teacherUserId, platformCode, platformCourse, effectiveFilter);
 
             results.add(result);
         }
 
-        return new AcademicBatchSyncResult(results);
+        AcademicBatchSyncResult result = new AcademicBatchSyncResult(results);
+        result.academicPeriodId();
+        return result;
     }
 
     private AcademicSyncResult synchronizePlatformCourse(
-            UUID institutionId, UUID teacherUserId, String platformCode, PlatformCourseSnapshot platformCourse) {
+            UUID institutionId,
+            UUID teacherUserId,
+            String platformCode,
+            PlatformCourseSnapshot platformCourse,
+            AcademicPlatformFilter filter) {
 
         AcademicCalendarSynchronizer.Result calendarResult =
                 academicCalendarSynchronizer.synchronize(institutionId, platformCode, platformCourse.academicYear());
@@ -100,6 +110,8 @@ public class AcademicSyncService {
         SyncAlertSummaryService.Summary alertSummary =
                 alertSummaryService.summarize(course.getId(), processingResult.activityIds());
 
+        UUID academicPeriodId = resolveAcademicPeriodId(filter, calendarResult);
+
         return new AcademicSyncResult(
                 course.getId(),
                 course.getName(),
@@ -107,7 +119,8 @@ public class AcademicSyncService {
                 processingResult.gradesProcessed(),
                 alertSummary.openAlerts(),
                 alertSummary.warnings(),
-                alertSummary.critical());
+                alertSummary.critical(),
+                academicPeriodId);
     }
 
     private AcademicPlatformSnapshot fetchSnapshot(
@@ -127,11 +140,27 @@ public class AcademicSyncService {
             throw new IllegalArgumentException("platform is required");
         }
 
-        AcademicPlatformFilter effectiveFilter = filter == null ? AcademicPlatformFilter.all() : filter;
-
         AcademicPlatformContext context = new AcademicPlatformContext(institutionId, teacherUserId);
 
-        return platform.fetchSnapshot(context, effectiveFilter);
+        return platform.fetchSnapshot(context, filter);
+    }
+
+    private static AcademicPlatformFilter effectiveFilter(AcademicPlatformFilter filter) {
+        return filter == null ? AcademicPlatformFilter.all() : filter;
+    }
+
+    private static UUID resolveAcademicPeriodId(
+            AcademicPlatformFilter filter, AcademicCalendarSynchronizer.Result calendarResult) {
+        if (!filter.hasPeriod()) {
+            return null;
+        }
+
+        UUID academicPeriodId = calendarResult.periodIdsByExternalId().get(filter.periodExternalId());
+        if (academicPeriodId == null) {
+            throw new IllegalStateException("Filtered academic period was not mapped during synchronization");
+        }
+
+        return academicPeriodId;
     }
 
     private PlatformCourseSnapshot resolveSingleCourse(AcademicPlatformSnapshot snapshot) {
