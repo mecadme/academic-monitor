@@ -53,7 +53,7 @@ public class CourseRosterSynchronizer {
         return courseRepository
                 .findByInstitutionIdAndPlatformCodeAndExternalId(
                         institutionId, platformCode, platformCourse.externalId())
-                .map(existing -> associateAcademicYear(existing, academicYearId))
+                .map(existing -> synchronizeExistingCourse(existing, platformCourse, academicYearId))
                 .orElseGet(() -> {
                     AcademicCourse created = new AcademicCourse(
                             institutionId,
@@ -70,10 +70,15 @@ public class CourseRosterSynchronizer {
                 });
     }
 
-    private AcademicCourse associateAcademicYear(AcademicCourse course, UUID academicYearId) {
-        if (course.associateAcademicYear(academicYearId)) {
+    private AcademicCourse synchronizeExistingCourse(
+            AcademicCourse course, PlatformCourseSnapshot platformCourse, UUID academicYearId) {
+        boolean academicYearChanged = course.associateAcademicYear(academicYearId);
+        boolean metadataChanged = course.updateMetadata(platformCourse.name(), platformCourse.subject());
+
+        if (academicYearChanged || metadataChanged) {
             return courseRepository.save(course);
         }
+
         return course;
     }
 
