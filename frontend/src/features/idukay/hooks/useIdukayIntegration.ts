@@ -15,7 +15,9 @@ import {
 type UseIdukayIntegrationInput = {
   institutionId: string | null;
   teacherUserId: string | null;
-  onSyncSuccess?: () => void | Promise<void>;
+  onSyncSuccess?: (
+    result: SyncIdukayPeriodResponse,
+  ) => void | Promise<void>;
 };
 
 export function useIdukayIntegration({
@@ -149,7 +151,7 @@ export function useIdukayIntegration({
 
       setSyncResult(result);
 
-      await onSyncSuccess?.();
+      await onSyncSuccess?.(result);
     } catch (err) {
       setError(
         err instanceof Error

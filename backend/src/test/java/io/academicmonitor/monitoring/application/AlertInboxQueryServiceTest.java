@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 
 import io.academicmonitor.academic.domain.AcademicCourse;
 import io.academicmonitor.academic.domain.AcademicCourseRepository;
+import io.academicmonitor.academic.domain.AcademicPeriod;
+import io.academicmonitor.academic.domain.AcademicPeriodRepository;
 import io.academicmonitor.academic.domain.Activity;
 import io.academicmonitor.academic.domain.ActivityRepository;
 import io.academicmonitor.academic.domain.Student;
@@ -31,6 +33,9 @@ class AlertInboxQueryServiceTest {
     private static final UUID TEACHER_USER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID COURSE_A_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID COURSE_B_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
+    private static final UUID ACADEMIC_YEAR_ID = UUID.fromString("33333333-3333-3333-3333-333333333334");
+    private static final UUID PERIOD_T1_ID = UUID.fromString("33333333-3333-3333-3333-333333333335");
+    private static final UUID PERIOD_T2_ID = UUID.fromString("33333333-3333-3333-3333-333333333336");
     private static final UUID FOREIGN_INSTITUTION_COURSE_ID = UUID.fromString("55555555-5555-5555-5555-555555555555");
     private static final UUID FOREIGN_TEACHER_COURSE_ID = UUID.fromString("66666666-6666-6666-6666-666666666666");
     private static final UUID ACTIVITY_A_ID = UUID.fromString("77777777-7777-7777-7777-777777777777");
@@ -42,6 +47,7 @@ class AlertInboxQueryServiceTest {
     private static final UUID ALERT_WARNING_ID = UUID.fromString("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
 
     private AcademicCourseRepository courseRepository;
+    private AcademicPeriodRepository academicPeriodRepository;
     private AlertRepository alertRepository;
     private ActivityRepository activityRepository;
     private StudentRepository studentRepository;
@@ -50,10 +56,12 @@ class AlertInboxQueryServiceTest {
     @BeforeEach
     void setUp() {
         courseRepository = mock(AcademicCourseRepository.class);
+        academicPeriodRepository = mock(AcademicPeriodRepository.class);
         alertRepository = mock(AlertRepository.class);
         activityRepository = mock(ActivityRepository.class);
         studentRepository = mock(StudentRepository.class);
-        service = new AlertInboxQueryService(courseRepository, alertRepository, activityRepository, studentRepository);
+        service = new AlertInboxQueryService(
+                courseRepository, academicPeriodRepository, alertRepository, activityRepository, studentRepository);
     }
 
     @Test
@@ -252,22 +260,154 @@ class AlertInboxQueryServiceTest {
         verifyNoInteractions(alertRepository, activityRepository, studentRepository);
     }
 
+    @Test
+    void filtersAlertsByOwnedAcademicPeriodAndExcludesOtherOrUnassignedActivities() {
+        AcademicCourse course = course(COURSE_A_ID, "Course A", "Physics");
+        AcademicPeriod periodT1 = period(PERIOD_T1_ID);
+        Activity t1Activity = activity(ACTIVITY_A_ID, COURSE_A_ID, PERIOD_T1_ID, "T1 Activity", "2026-01-15");
+        Activity t2Activity = activity(ACTIVITY_B_ID, COURSE_A_ID, PERIOD_T2_ID, "T2 Activity", "2026-02-15");
+        UUID unassignedActivityId = UUID.fromString("89898989-8989-8989-8989-898989898989");
+        Activity unassignedActivity =
+                activity(unassignedActivityId, COURSE_A_ID, null, "Legacy Activity", "2026-03-15");
+        Student student = student(STUDENT_A_ID, INSTITUTION_ID, "Ana Torres");
+        Alert t1Alert = alert(
+                ALERT_CRITICAL_LOW_ID,
+                INSTITUTION_ID,
+                COURSE_A_ID,
+                ACTIVITY_A_ID,
+                STUDENT_A_ID,
+                AlertSeverity.CRITICAL,
+                "3.50",
+                true);
+        Alert t2Alert = alert(
+                ALERT_CRITICAL_HIGH_ID,
+                INSTITUTION_ID,
+                COURSE_A_ID,
+                ACTIVITY_B_ID,
+                STUDENT_A_ID,
+                AlertSeverity.CRITICAL,
+                "4.50",
+                true);
+        Alert unassignedAlert = alert(
+                ALERT_WARNING_ID,
+                INSTITUTION_ID,
+                COURSE_A_ID,
+                unassignedActivityId,
+                STUDENT_A_ID,
+                AlertSeverity.WARNING,
+                "6.50",
+                true);
+
+        when(courseRepository.findByInstitutionIdAndTeacherUserId(INSTITUTION_ID, TEACHER_USER_ID))
+                .thenReturn(List.of(course));
+        when(academicPeriodRepository.findByAcademicYearIdIn(Set.of(ACADEMIC_YEAR_ID)))
+                .thenReturn(List.of(periodT1));
+        when(alertRepository.findByInstitutionIdAndCourseIdInAndStatus(
+                        INSTITUTION_ID, Set.of(COURSE_A_ID), AlertStatus.OPEN))
+                .thenReturn(List.of(t2Alert, unassignedAlert, t1Alert));
+        when(activityRepository.findActivitiesByCourseIdIn(Set.of(COURSE_A_ID)))
+                .thenReturn(List.of(t1Activity, t2Activity, unassignedActivity));
+        when(studentRepository.findByInstitutionIdAndIdIn(INSTITUTION_ID, Set.of(STUDENT_A_ID)))
+                .thenReturn(List.of(student));
+
+        AlertInboxResponse result = service.getInbox(INSTITUTION_ID, TEACHER_USER_ID, null, PERIOD_T1_ID);
+
+        assertEquals(1, result.total());
+        assertEquals(
+                List.of(ALERT_CRITICAL_LOW_ID),
+                result.alerts().stream().map(AlertInboxResponse.AlertItem::id).toList());
+    }
+
+    @Test
+    void keepsAlertsFromEveryPeriodWhenNoPeriodFilterIsSupplied() {
+        AcademicCourse course = course(COURSE_A_ID, "Course A", "Physics");
+        Activity t1Activity = activity(ACTIVITY_A_ID, COURSE_A_ID, PERIOD_T1_ID, "T1 Activity", "2026-01-15");
+        Activity t2Activity = activity(ACTIVITY_B_ID, COURSE_A_ID, PERIOD_T2_ID, "T2 Activity", "2026-02-15");
+        Student student = student(STUDENT_A_ID, INSTITUTION_ID, "Ana Torres");
+        Alert t1Alert = alert(
+                ALERT_CRITICAL_LOW_ID,
+                INSTITUTION_ID,
+                COURSE_A_ID,
+                ACTIVITY_A_ID,
+                STUDENT_A_ID,
+                AlertSeverity.CRITICAL,
+                "3.50",
+                true);
+        Alert t2Alert = alert(
+                ALERT_CRITICAL_HIGH_ID,
+                INSTITUTION_ID,
+                COURSE_A_ID,
+                ACTIVITY_B_ID,
+                STUDENT_A_ID,
+                AlertSeverity.CRITICAL,
+                "4.50",
+                true);
+
+        when(courseRepository.findByInstitutionIdAndTeacherUserId(INSTITUTION_ID, TEACHER_USER_ID))
+                .thenReturn(List.of(course));
+        when(alertRepository.findByInstitutionIdAndCourseIdInAndStatus(
+                        INSTITUTION_ID, Set.of(COURSE_A_ID), AlertStatus.OPEN))
+                .thenReturn(List.of(t2Alert, t1Alert));
+        when(activityRepository.findActivitiesByCourseIdIn(Set.of(COURSE_A_ID)))
+                .thenReturn(List.of(t1Activity, t2Activity));
+        when(studentRepository.findByInstitutionIdAndIdIn(INSTITUTION_ID, Set.of(STUDENT_A_ID)))
+                .thenReturn(List.of(student));
+
+        AlertInboxResponse result = service.getInbox(INSTITUTION_ID, TEACHER_USER_ID, null, null);
+
+        assertEquals(2, result.total());
+        assertEquals(
+                List.of(ALERT_CRITICAL_LOW_ID, ALERT_CRITICAL_HIGH_ID),
+                result.alerts().stream().map(AlertInboxResponse.AlertItem::id).toList());
+        verifyNoInteractions(academicPeriodRepository);
+    }
+
+    @Test
+    void returnsEmptyInboxForUnownedAcademicPeriodWithoutQueryingAlerts() {
+        AcademicCourse course = course(COURSE_A_ID, "Course A", "Physics");
+        AcademicPeriod periodT1 = period(PERIOD_T1_ID);
+
+        when(courseRepository.findByInstitutionIdAndTeacherUserId(INSTITUTION_ID, TEACHER_USER_ID))
+                .thenReturn(List.of(course));
+        when(academicPeriodRepository.findByAcademicYearIdIn(Set.of(ACADEMIC_YEAR_ID)))
+                .thenReturn(List.of(periodT1));
+
+        AlertInboxResponse result = service.getInbox(INSTITUTION_ID, TEACHER_USER_ID, null, PERIOD_T2_ID);
+
+        assertEquals(0, result.total());
+        assertEquals(List.of(), result.alerts());
+        verifyNoInteractions(alertRepository, activityRepository, studentRepository);
+    }
+
     private static AcademicCourse course(UUID id, String name, String subject) {
         AcademicCourse course = mock(AcademicCourse.class);
         when(course.getId()).thenReturn(id);
+        when(course.getAcademicYearId()).thenReturn(ACADEMIC_YEAR_ID);
         when(course.getName()).thenReturn(name);
         when(course.getSubject()).thenReturn(subject);
         return course;
     }
 
     private static Activity activity(UUID id, UUID courseId, String name, String dueDate) {
+        return activity(id, courseId, null, name, dueDate);
+    }
+
+    private static Activity activity(UUID id, UUID courseId, UUID academicPeriodId, String name, String dueDate) {
         Activity activity = mock(Activity.class);
         when(activity.getId()).thenReturn(id);
         when(activity.getCourseId()).thenReturn(courseId);
+        when(activity.getAcademicPeriodId()).thenReturn(academicPeriodId);
         when(activity.getName()).thenReturn(name);
         when(activity.getMaxScore()).thenReturn(new BigDecimal("10.00"));
         when(activity.getDueDate()).thenReturn(LocalDate.parse(dueDate));
         return activity;
+    }
+
+    private static AcademicPeriod period(UUID id) {
+        AcademicPeriod period = mock(AcademicPeriod.class);
+        when(period.getId()).thenReturn(id);
+        when(period.getAcademicYearId()).thenReturn(ACADEMIC_YEAR_ID);
+        return period;
     }
 
     private static Student student(UUID id, UUID institutionId, String fullName) {

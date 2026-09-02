@@ -24,6 +24,7 @@ class AlertInboxControllerTest {
     private static final UUID INSTITUTION_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID TEACHER_USER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID COURSE_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final UUID ACADEMIC_PERIOD_ID = UUID.fromString("33333333-3333-3333-3333-333333333334");
     private static final UUID ALERT_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
     private static final UUID ACTIVITY_ID = UUID.fromString("55555555-5555-5555-5555-555555555555");
     private static final UUID STUDENT_ID = UUID.fromString("66666666-6666-6666-6666-666666666666");
@@ -58,12 +59,14 @@ class AlertInboxControllerTest {
                                 LocalDate.of(2026, 1, 15)),
                         new AlertInboxResponse.StudentSummary(STUDENT_ID, "Ana Torres"))));
 
-        when(service.getInbox(INSTITUTION_ID, TEACHER_USER_ID, COURSE_ID)).thenReturn(response);
+        when(service.getInbox(INSTITUTION_ID, TEACHER_USER_ID, COURSE_ID, ACADEMIC_PERIOD_ID))
+                .thenReturn(response);
 
         mockMvc.perform(get("/api/v1/alerts")
                         .queryParam("institutionId", INSTITUTION_ID.toString())
                         .queryParam("teacherUserId", TEACHER_USER_ID.toString())
-                        .queryParam("courseId", COURSE_ID.toString()))
+                        .queryParam("courseId", COURSE_ID.toString())
+                        .queryParam("academicPeriodId", ACADEMIC_PERIOD_ID.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.institutionId").value(INSTITUTION_ID.toString()))
                 .andExpect(jsonPath("$.teacherUserId").value(TEACHER_USER_ID.toString()))
@@ -82,7 +85,7 @@ class AlertInboxControllerTest {
                 .andExpect(jsonPath("$.alerts[0].student.id").value(STUDENT_ID.toString()))
                 .andExpect(jsonPath("$.alerts[0].student.name").value("Ana Torres"));
 
-        verify(service).getInbox(INSTITUTION_ID, TEACHER_USER_ID, COURSE_ID);
+        verify(service).getInbox(INSTITUTION_ID, TEACHER_USER_ID, COURSE_ID, ACADEMIC_PERIOD_ID);
     }
 
     @Test

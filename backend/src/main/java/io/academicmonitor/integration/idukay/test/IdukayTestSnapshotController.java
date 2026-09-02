@@ -129,6 +129,7 @@ public class IdukayTestSnapshotController {
                 syncService.synchronizeAll(institutionId, teacherUserId, PLATFORM_CODE, adapter, filter);
 
         return new TestBatchSyncResponse(
+                result.academicPeriodId(),
                 result.coursesProcessed(),
                 result.gradesProcessed(),
                 result.openAlerts(),
@@ -149,5 +150,10 @@ public class IdukayTestSnapshotController {
     public record TestFilteredSnapshotResponse(String periodExternalId, int courses, int activities, int grades) {}
 
     public record TestBatchSyncResponse(
-            int coursesProcessed, int gradesProcessed, int openAlerts, long warnings, long critical) {}
+            UUID academicPeriodId,
+            int coursesProcessed,
+            int gradesProcessed,
+            int openAlerts,
+            long warnings,
+            long critical) {}
 }

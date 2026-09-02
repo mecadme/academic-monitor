@@ -5,6 +5,7 @@ export type SyncIdukayPeriodInput = {
 }
 
 export type SyncIdukayPeriodResponse = {
+  academicPeriodId: string
   coursesProcessed: number
   gradesProcessed: number
   openAlerts: number

@@ -9,4 +9,17 @@ public record AcademicSyncResult(
         int gradesProcessed,
         int openAlerts,
         long warnings,
-        long critical) {}
+        long critical,
+        UUID academicPeriodId) {
+
+    public AcademicSyncResult(
+            UUID courseId,
+            String courseName,
+            int students,
+            int gradesProcessed,
+            int openAlerts,
+            long warnings,
+            long critical) {
+        this(courseId, courseName, students, gradesProcessed, openAlerts, warnings, critical, null);
+    }
+}
