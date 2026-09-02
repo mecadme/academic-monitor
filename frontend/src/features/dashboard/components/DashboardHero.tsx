@@ -1,7 +1,7 @@
-import type { DashboardResult } from '../../../api/demo';
+import type { AcademicDashboard } from '../api/fetchAcademicDashboard';
 
 type DashboardHeroProps = {
-  dashboard: DashboardResult;
+  dashboard: AcademicDashboard;
 };
 
 export function DashboardHero({
@@ -11,30 +11,31 @@ export function DashboardHero({
     <section className="container hero">
       <div className="hero-text">
         <p className="section-label">
-          Curso monitoreado
+          Dashboard académico
         </p>
 
         <h2 className="course-title">
-          {dashboard.courseName}
+          Seguimiento de cursos
         </h2>
 
         <p className="course-subtitle">
-          {dashboard.subject}
+          Información académica persistida y
+          alertas abiertas del contexto actual.
         </p>
       </div>
 
       <div className="hero-note">
         <p className="hero-note-title">
-          Regla de monitoreo
+          Alcance actual
         </p>
 
         <div className="rule-row">
-          <span className="rule-dot rule-critical" />
+          <span className="rule-dot rule-warning" />
 
           <span>
-            <strong>Crítico</strong>
+            <strong>{dashboard.summary.courses}</strong>
             {' · '}
-            nota ≤ 5.00
+            cursos del docente
           </span>
         </div>
 
@@ -42,9 +43,9 @@ export function DashboardHero({
           <span className="rule-dot rule-warning" />
 
           <span>
-            <strong>Aviso</strong>
+            <strong>{dashboard.summary.students}</strong>
             {' · '}
-            nota &gt; 5.00 y ≤ 7.00
+            estudiantes distintos
           </span>
         </div>
       </div>

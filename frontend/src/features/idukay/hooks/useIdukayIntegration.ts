@@ -15,11 +15,13 @@ import {
 type UseIdukayIntegrationInput = {
   institutionId: string | null;
   teacherUserId: string | null;
+  onSyncSuccess?: () => void | Promise<void>;
 };
 
 export function useIdukayIntegration({
                                        institutionId,
                                        teacherUserId,
+                                       onSyncSuccess,
                                      }: UseIdukayIntegrationInput) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -146,6 +148,8 @@ export function useIdukayIntegration({
         });
 
       setSyncResult(result);
+
+      await onSyncSuccess?.();
     } catch (err) {
       setError(
         err instanceof Error

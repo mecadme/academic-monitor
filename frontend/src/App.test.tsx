@@ -28,54 +28,49 @@ const contextResponse = {
   teacherUserId: 'context-teacher',
 };
 
-const syncResponse = {
-  institutionId: 'institution-1',
-  teacherUserId: 'teacher-1',
-  courseId: 'course-1',
-  courseName: '1.º BGU A',
-  scenario: 'INITIAL',
-  students: 4,
-  gradesProcessed: 4,
-  openAlerts: 3,
-  warnings: 2,
-  critical: 1,
-};
-
 const dashboardResponse = {
-  courseId: 'course-1',
-  courseName: '1.º BGU A',
-  subject: 'Física',
-  activity: {
-    id: 'activity-1',
-    name: 'Movimiento rectilíneo',
-  },
+  institutionId: 'context-institution',
+  teacherUserId: 'context-teacher',
   summary: {
-    totalStudents: 4,
-    openAlerts: 3,
-    warnings: 2,
-    critical: 1,
-    resolvedAlerts: 0,
+    courses: 2,
+    students: 45,
+    activities: 37,
+    openAlerts: 21,
+    warnings: 13,
+    critical: 8,
   },
-  students: [
+  courses: [
     {
-      id: 'student-1',
-      name: 'Ana Torres',
-      score: 9.2,
-      status: 'OK',
+      id: 'course-1',
+      name: '1.º BGU A',
+      subject: 'Física',
+      academicYear: '2025 - 2026',
+      students: 32,
+      activities: 24,
+      openAlerts: 18,
+      warnings: 11,
+      critical: 7,
     },
     {
-      id: 'student-2',
-      name: 'Carlos Vega',
-      score: 7,
-      status: 'WARNING',
-    },
-    {
-      id: 'student-3',
-      name: 'Mateo Cárdenas',
-      score: 4.8,
-      status: 'CRITICAL',
+      id: 'course-2',
+      name: '1.º BGU B',
+      subject: 'Química',
+      academicYear: '2025 - 2026',
+      students: 20,
+      activities: 13,
+      openAlerts: 3,
+      warnings: 2,
+      critical: 1,
     },
   ],
+};
+
+const idukaySyncResponse = {
+  coursesProcessed: 13,
+  gradesProcessed: 2500,
+  openAlerts: 230,
+  warnings: 160,
+  critical: 70,
 };
 
 describe('App', () => {
@@ -83,37 +78,37 @@ describe('App', () => {
     vi.unstubAllGlobals();
   });
 
-  it('loads and renders the initial academic monitoring dashboard', async () => {
+  it('renders persisted academic dashboard data without calling DEMO', async () => {
     const fetchMock = createFetchMock();
-
     vi.stubGlobal('fetch', fetchMock);
 
     render(<App />);
 
-    expect(screen.getByText(/preparando entorno de demostración/i)).toBeInTheDocument();
-
     expect(
-      await screen.findByRole('heading', {
-        name: '1.º BGU A',
-      }),
+      screen.getByText(
+        /inicializando contexto académico/i,
+      ),
     ).toBeInTheDocument();
 
+    expect(
+      await screen.findByText('1.º BGU A'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Física')).toBeInTheDocument();
-
+    expect(screen.getByText('Química')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('2025 - 2026'),
+    ).toHaveLength(2);
     expect(
       screen.getByRole('heading', {
-        name: 'Movimiento rectilíneo',
+        name: 'Resumen por curso',
       }),
     ).toBeInTheDocument();
 
-    expect(screen.getByText('Ana Torres')).toBeInTheDocument();
-
-    expect(screen.getByText('Mateo Cárdenas')).toBeInTheDocument();
-
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/context/bootstrap'),
+      expect.stringContaining(
+        '/api/v1/context/bootstrap',
+      ),
       {
         method: 'POST',
         headers: {
@@ -121,91 +116,103 @@ describe('App', () => {
         },
       },
     );
-
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/demo/sync?scenario=INITIAL'),
-      {
-        method: 'POST',
-      },
+      expect.stringContaining(
+        '/api/v1/dashboard?institutionId=context-institution&teacherUserId=context-teacher',
+      ),
+      expect.objectContaining({
+        method: 'GET',
+      }),
     );
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/demo/dashboard?teacherUserId=teacher-1'),
-    );
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).includes('/api/v1/demo/'),
+      ),
+    ).toBe(false);
   });
 
   it('uses the neutral context IDs for the Idukay integration path', async () => {
     const user = userEvent.setup();
     const fetchMock = createFetchMock();
-
     vi.stubGlobal('fetch', fetchMock);
 
     render(<App />);
 
-    await screen.findByRole('heading', {
-      name: '1.º BGU A',
-    });
-
-    await user.type(
-      screen.getByRole('textbox', {
-        name: /correo de idukay/i,
-      }),
-      'teacher@example.com',
-    );
-
-    await user.type(
-      screen.getByLabelText(/contraseña/i),
-      'secret-password',
-    );
-
-    await user.click(
-      screen.getByRole('button', {
-        name: /conectar idukay/i,
-      }),
-    );
+    await screen.findByText('1.º BGU A');
+    await connectIdukay(user);
 
     await waitFor(() => {
       expect(
-        fetchMock.mock.calls.some(
-          ([url]) => String(url).includes(
+        fetchMock.mock.calls.some(([url]) =>
+          String(url).includes(
             '/api/v1/integrations/idukay/test-periods',
           ),
         ),
       ).toBe(true);
     });
 
-    const loginCall = fetchMock.mock.calls.find(
-      ([url]) => String(url).includes(
+    const loginCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes(
         '/api/v1/integrations/idukay/test-login',
       ),
     );
-
     expect(loginCall).toBeDefined();
 
     const loginRequest = loginCall?.[1] as RequestInit;
-    const loginBody = JSON.parse(String(loginRequest.body));
-
+    const loginBody = JSON.parse(
+      String(loginRequest.body),
+    );
     expect(loginBody).toMatchObject({
       institutionId: 'context-institution',
       teacherUserId: 'context-teacher',
     });
 
-    expect(loginBody).not.toMatchObject({
-      institutionId: 'institution-1',
-      teacherUserId: 'teacher-1',
-    });
-
-    const periodsCall = fetchMock.mock.calls.find(
-      ([url]) => String(url).includes(
+    const periodsCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes(
         '/api/v1/integrations/idukay/test-periods',
       ),
     );
-
     expect(String(periodsCall?.[0])).toContain(
       'institutionId=context-institution',
     );
-
     expect(String(periodsCall?.[0])).toContain(
+      'teacherUserId=context-teacher',
+    );
+  });
+
+  it('refreshes the academic dashboard after a successful Idukay sync', async () => {
+    const user = userEvent.setup();
+    const fetchMock = createFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    await screen.findByText('1.º BGU A');
+    await connectIdukay(user);
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Sincronizar T1',
+      }),
+    );
+
+    await waitFor(() => {
+      const dashboardCalls = fetchMock.mock.calls.filter(
+        ([url]) =>
+          String(url).includes('/api/v1/dashboard?'),
+      );
+      expect(dashboardCalls).toHaveLength(2);
+    });
+
+    const syncCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes(
+        '/api/v1/integrations/idukay/test-sync',
+      ),
+    );
+    expect(String(syncCall?.[0])).toContain(
+      'institutionId=context-institution',
+    );
+    expect(String(syncCall?.[0])).toContain(
       'teacherUserId=context-teacher',
     );
   });
@@ -214,7 +221,6 @@ describe('App', () => {
     const fetchMock = createFetchMock({
       contextFails: true,
     });
-
     vi.stubGlobal('fetch', fetchMock);
 
     render(<App />);
@@ -224,8 +230,29 @@ describe('App', () => {
         'No se pudo inicializar el contexto académico (500).',
       ),
     ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+async function connectIdukay(
+  user: ReturnType<typeof userEvent.setup>,
+) {
+  await user.type(
+    screen.getByRole('textbox', {
+      name: /correo de idukay/i,
+    }),
+    'teacher@example.com',
+  );
+  await user.type(
+    screen.getByLabelText(/contraseña/i),
+    'secret-password',
+  );
+  await user.click(
+    screen.getByRole('button', {
+      name: /conectar idukay/i,
+    }),
+  );
+}
 
 function createFetchMock(
   options: {
@@ -242,48 +269,66 @@ function createFetchMock(
           return {
             ok: false,
             status: 500,
-          };
+          } as Response;
         }
 
         return {
           ok: true,
           json: async () => contextResponse,
-        };
+        } as Response;
       }
 
-      if (url.includes('/api/v1/demo/sync')) {
-        return {
-          ok: true,
-          json: async () => syncResponse,
-        };
-      }
-
-      if (url.includes('/api/v1/demo/dashboard')) {
+      if (url.includes('/api/v1/dashboard')) {
         return {
           ok: true,
           json: async () => dashboardResponse,
-        };
+        } as Response;
       }
 
-      if (url.includes('/api/v1/integrations/idukay/test-login')) {
+      if (
+        url.includes(
+          '/api/v1/integrations/idukay/test-login',
+        )
+      ) {
         return {
           ok: true,
           json: async () => ({
             authenticated: true,
           }),
-        };
+        } as Response;
       }
 
-      if (url.includes('/api/v1/integrations/idukay/test-periods')) {
+      if (
+        url.includes(
+          '/api/v1/integrations/idukay/test-periods',
+        )
+      ) {
         return {
           ok: true,
           json: async () => ({
             academicYearId: 'year-1',
             academicYear: '2025 - 2026',
             baseScore: 10,
-            periods: [],
+            periods: [
+              {
+                id: 'period-t1',
+                name: 'Trimestre 1',
+                abbreviation: 'T1',
+              },
+            ],
           }),
-        };
+        } as Response;
+      }
+
+      if (
+        url.includes(
+          '/api/v1/integrations/idukay/test-sync',
+        )
+      ) {
+        return {
+          ok: true,
+          json: async () => idukaySyncResponse,
+        } as Response;
       }
 
       throw new Error(`Unexpected request: ${url}`);

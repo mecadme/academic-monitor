@@ -4,6 +4,8 @@ import io.academicmonitor.academic.domain.AcademicPeriod;
 import io.academicmonitor.academic.domain.AcademicPeriodRepository;
 import io.academicmonitor.academic.domain.AcademicYear;
 import io.academicmonitor.academic.domain.AcademicYearRepository;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
@@ -30,6 +32,11 @@ class AcademicCalendarRepositoryAdapter implements AcademicYearRepository, Acade
             UUID institutionId, String platformCode, String externalId) {
         return academicYearRepository.findByInstitutionIdAndPlatformCodeAndExternalId(
                 institutionId, platformCode, externalId);
+    }
+
+    @Override
+    public List<AcademicYear> findByInstitutionIdAndIdIn(UUID institutionId, Collection<UUID> academicYearIds) {
+        return academicYearRepository.findByInstitutionIdAndIdIn(institutionId, academicYearIds);
     }
 
     @Override

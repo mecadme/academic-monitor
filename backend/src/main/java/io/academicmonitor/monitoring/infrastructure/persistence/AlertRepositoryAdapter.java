@@ -43,4 +43,10 @@ class AlertRepositoryAdapter implements AlertRepository {
 
         return repository.findByCourseIdAndStatusAndActivityIdIn(courseId, status, activityIds);
     }
+
+    @Override
+    public List<Alert> findByInstitutionIdAndCourseIdInAndStatus(
+            UUID institutionId, Collection<UUID> courseIds, AlertStatus status) {
+        return repository.findByInstitutionIdAndCourseIdInAndStatus(institutionId, courseIds, status);
+    }
 }

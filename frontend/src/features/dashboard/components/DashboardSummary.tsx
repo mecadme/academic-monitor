@@ -1,8 +1,8 @@
-import type { DashboardResult } from '../../../api/demo';
+import type { AcademicDashboard } from '../api/fetchAcademicDashboard';
 import { SummaryCard } from './SummaryCard';
 
 type DashboardSummaryProps = {
-  summary: DashboardResult['summary'];
+  summary: AcademicDashboard['summary'];
 };
 
 export function DashboardSummary({
@@ -11,9 +11,21 @@ export function DashboardSummary({
   return (
     <section className="container summary-grid">
       <SummaryCard
+        label="Cursos"
+        value={summary.courses}
+        helper="Asignados al docente"
+      />
+
+      <SummaryCard
         label="Estudiantes"
-        value={summary.totalStudents}
-        helper="Curso actual"
+        value={summary.students}
+        helper="Sin duplicados"
+      />
+
+      <SummaryCard
+        label="Actividades"
+        value={summary.activities}
+        helper="En todos los cursos"
       />
 
       <SummaryCard

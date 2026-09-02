@@ -16,4 +16,7 @@ interface AlertDataRepository extends JpaRepository<Alert, UUID> {
     List<Alert> findByCourseIdAndStatus(UUID courseId, AlertStatus status);
 
     List<Alert> findByCourseIdAndStatusAndActivityIdIn(UUID courseId, AlertStatus status, Collection<UUID> activityIds);
+
+    List<Alert> findByInstitutionIdAndCourseIdInAndStatus(
+            UUID institutionId, Collection<UUID> courseIds, AlertStatus status);
 }

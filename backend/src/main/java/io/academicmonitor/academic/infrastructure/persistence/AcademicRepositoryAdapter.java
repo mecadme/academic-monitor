@@ -10,6 +10,7 @@ import io.academicmonitor.academic.domain.Grade;
 import io.academicmonitor.academic.domain.GradeRepository;
 import io.academicmonitor.academic.domain.Student;
 import io.academicmonitor.academic.domain.StudentRepository;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -82,6 +83,11 @@ class AcademicRepositoryAdapter
     }
 
     @Override
+    public List<AcademicCourse> findByInstitutionIdAndTeacherUserId(UUID institutionId, UUID teacherUserId) {
+        return courseRepository.findByInstitutionIdAndTeacherUserId(institutionId, teacherUserId);
+    }
+
+    @Override
     public Optional<Student> findStudentByInstitutionIdAndPlatformCodeAndExternalId(
             UUID institutionId, String platformCode, String externalId) {
 
@@ -114,6 +120,11 @@ class AcademicRepositoryAdapter
     }
 
     @Override
+    public List<CourseEnrollment> findEnrollmentsByCourseIdIn(Collection<UUID> courseIds) {
+        return enrollmentRepository.findByCourseIdIn(courseIds);
+    }
+
+    @Override
     public Optional<Student> findStudentById(UUID studentId) {
         return studentRepository.findById(studentId);
     }
@@ -121,5 +132,10 @@ class AcademicRepositoryAdapter
     @Override
     public Optional<Activity> findLatestByCourseId(UUID courseId) {
         return activityRepository.findTopByCourseIdOrderByDueDateDesc(courseId);
+    }
+
+    @Override
+    public List<Activity> findActivitiesByCourseIdIn(Collection<UUID> courseIds) {
+        return activityRepository.findByCourseIdIn(courseIds);
     }
 }
