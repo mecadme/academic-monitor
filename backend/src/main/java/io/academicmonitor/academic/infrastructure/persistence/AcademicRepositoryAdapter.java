@@ -130,6 +130,11 @@ class AcademicRepositoryAdapter
     }
 
     @Override
+    public List<Student> findByInstitutionIdAndIdIn(UUID institutionId, Collection<UUID> studentIds) {
+        return studentRepository.findByInstitutionIdAndIdIn(institutionId, studentIds);
+    }
+
+    @Override
     public Optional<Activity> findLatestByCourseId(UUID courseId) {
         return activityRepository.findTopByCourseIdOrderByDueDateDesc(courseId);
     }
