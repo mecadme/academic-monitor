@@ -291,5 +291,44 @@ describe(
         ).toBeNull();
       },
     );
+
+    it(
+      'notifies the caller after a successful synchronization',
+      async () => {
+        const onSyncSuccess = vi.fn()
+          .mockResolvedValue(undefined);
+
+        const { result } =
+          renderHook(() =>
+            useIdukayIntegration({
+              ...context,
+              onSyncSuccess,
+            }),
+          );
+
+        act(() => {
+          result.current.setEmail(
+            'teacher@example.com',
+          );
+
+          result.current.setPassword(
+            'secret-password',
+          );
+        });
+
+        await act(async () => {
+          await result.current.connect();
+        });
+
+        await act(async () => {
+          await result.current
+            .synchronizeSelectedPeriod();
+        });
+
+        expect(
+          onSyncSuccess,
+        ).toHaveBeenCalledTimes(1);
+      },
+    );
   },
 );

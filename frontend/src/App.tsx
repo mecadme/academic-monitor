@@ -1,9 +1,9 @@
 import './App.css';
 
-import { ActivityPanel } from './features/dashboard/components/ActivityPanel';
+import { AcademicCoursePanel } from './features/dashboard/components/AcademicCoursePanel';
 import { DashboardHero } from './features/dashboard/components/DashboardHero';
 import { DashboardSummary } from './features/dashboard/components/DashboardSummary';
-import { useDemoDashboard } from './features/dashboard/hooks/useDemoDashboard';
+import { useAcademicDashboard } from './features/dashboard/hooks/useAcademicDashboard';
 
 import { IdukayIntegrationCard } from './features/dashboard/components/IdukayIntegrationCard';
 import { useIdukayIntegration } from './features/idukay/hooks/useIdukayIntegration';
@@ -13,14 +13,18 @@ import { useAcademicContext } from './features/context/hooks/useAcademicContext'
 
 function App() {
   const context = useAcademicContext();
-  const demo = useDemoDashboard();
-
-  const idukay = useIdukayIntegration({
+  const dashboard = useAcademicDashboard({
     institutionId: context.institutionId,
     teacherUserId: context.teacherUserId,
   });
 
-  if (demo.loading) {
+  const idukay = useIdukayIntegration({
+    institutionId: context.institutionId,
+    teacherUserId: context.teacherUserId,
+    onSyncSuccess: dashboard.refresh,
+  });
+
+  if (context.loading) {
     return (
       <main className="app-shell loading-shell">
         <div className="loading-card">
@@ -33,14 +37,14 @@ function App() {
           </h1>
 
           <p>
-            Preparando entorno de demostración...
+            Inicializando contexto académico...
           </p>
         </div>
       </main>
     );
   }
 
-  if (demo.error && !demo.dashboard) {
+  if (context.error) {
     return (
       <main className="app-shell loading-shell">
         <div className="loading-card">
@@ -53,14 +57,52 @@ function App() {
           </h1>
 
           <p>
-            {demo.error}
+            {context.error}
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (dashboard.loading && !dashboard.dashboard) {
+    return (
+      <main className="app-shell loading-shell">
+        <div className="loading-card">
+          <div className="loading-mark">
+            AM
+          </div>
+
+          <h1>
+            Academic Monitor
+          </h1>
+
+          <p>
+            Cargando dashboard académico...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (dashboard.error && !dashboard.dashboard) {
+    return (
+      <main className="app-shell loading-shell">
+        <div className="loading-card">
+          <div className="loading-mark">
+            !
+          </div>
+
+          <h1>
+            No se pudo cargar Academic Monitor
+          </h1>
+
+          <p>
+            {dashboard.error}
           </p>
 
           <button
             className="btn btn-primary"
-            onClick={() =>
-              demo.loadScenario('INITIAL')
-            }
+            onClick={dashboard.refresh}
           >
             Reintentar
           </button>
@@ -69,27 +111,35 @@ function App() {
     );
   }
 
-  if (!demo.dashboard) {
-    return null;
+  if (!dashboard.dashboard) {
+    return (
+      <main className="app-shell loading-shell">
+        <div className="loading-card">
+          <div className="loading-mark">
+            AM
+          </div>
+
+          <h1>
+            Academic Monitor
+          </h1>
+
+          <p>
+            Cargando dashboard académico...
+          </p>
+        </div>
+      </main>
+    );
   }
 
   const displayedError =
-    demo.error ?? context.error ?? idukay.error;
+    dashboard.error ?? idukay.error;
 
   return (
     <main className="app-shell">
-      <AppHeader
-        syncing={demo.syncing}
-        onInitialSync={() =>
-          demo.loadScenario('INITIAL')
-        }
-        onImprovement={() =>
-          demo.loadScenario('IMPROVED')
-        }
-      />
+      <AppHeader />
 
       <DashboardHero
-        dashboard={demo.dashboard}
+        dashboard={dashboard.dashboard}
       />
 
       {displayedError && (
@@ -107,7 +157,7 @@ function App() {
       )}
 
       <DashboardSummary
-        summary={demo.dashboard.summary}
+        summary={dashboard.dashboard.summary}
       />
 
       <IdukayIntegrationCard
@@ -158,29 +208,11 @@ function App() {
         }
       />
 
-      <ActivityPanel
-        dashboard={demo.dashboard}
-        onRefresh={demo.refreshDashboard}
+      <AcademicCoursePanel
+        courses={dashboard.dashboard.courses}
+        refreshing={dashboard.loading}
+        onRefresh={dashboard.refresh}
       />
-
-      <section className="container footer-note">
-        <div className="footer-note-card">
-          <div className="footer-note-icon">
-            i
-          </div>
-
-          <p>
-            <strong>
-              Entorno de demostración.
-            </strong>{' '}
-
-            “Sincronizar demo” carga el
-            escenario inicial y “Simular
-            mejora” permite observar la
-            resolución automática de alertas.
-          </p>
-        </div>
-      </section>
     </main>
   );
 }

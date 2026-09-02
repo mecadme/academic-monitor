@@ -12,4 +12,6 @@ public interface AcademicCourseRepository {
             UUID institutionId, String platformCode, String externalId);
 
     List<AcademicCourse> findByTeacherUserId(UUID teacherUserId);
+
+    List<AcademicCourse> findByInstitutionIdAndTeacherUserId(UUID institutionId, UUID teacherUserId);
 }
