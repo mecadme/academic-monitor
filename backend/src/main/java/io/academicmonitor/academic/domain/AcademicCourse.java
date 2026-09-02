@@ -2,6 +2,7 @@ package io.academicmonitor.academic.domain;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
@@ -118,6 +119,24 @@ public class AcademicCourse {
 
     public boolean isActive() {
         return active;
+    }
+
+    public boolean updateMetadata(String expectedName, String expectedSubject) {
+        String requiredName = requireText(expectedName, "name");
+        String normalizedSubject = expectedSubject == null ? null : expectedSubject.trim();
+
+        boolean nameChanged = !name.equals(requiredName);
+        boolean subjectChanged = !Objects.equals(subject, normalizedSubject);
+
+        if (nameChanged) {
+            name = requiredName;
+        }
+
+        if (subjectChanged) {
+            subject = normalizedSubject;
+        }
+
+        return nameChanged || subjectChanged;
     }
 
     public boolean associateAcademicYear(UUID expectedAcademicYearId) {

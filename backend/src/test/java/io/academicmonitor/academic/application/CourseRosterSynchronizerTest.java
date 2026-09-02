@@ -34,6 +34,7 @@ class CourseRosterSynchronizerTest {
         when(courseRepository.findByInstitutionIdAndPlatformCodeAndExternalId(INSTITUTION_ID, PLATFORM, "course-001"))
                 .thenReturn(Optional.of(legacyCourse));
         when(legacyCourse.associateAcademicYear(ACADEMIC_YEAR_ID)).thenReturn(true);
+        when(legacyCourse.updateMetadata("Course", "Physics")).thenReturn(false);
         when(courseRepository.save(legacyCourse)).thenReturn(legacyCourse);
 
         CourseRosterSynchronizer synchronizer = synchronizer(courseRepository);
@@ -43,14 +44,58 @@ class CourseRosterSynchronizerTest {
 
         assertSame(legacyCourse, result);
         verify(legacyCourse).associateAcademicYear(ACADEMIC_YEAR_ID);
+        verify(legacyCourse).updateMetadata("Course", "Physics");
         verify(courseRepository).save(legacyCourse);
+    }
+
+    @Test
+    void refreshesStaleMetadataAndSavesExistingCourse() {
+        AcademicCourseRepository courseRepository = mock(AcademicCourseRepository.class);
+        AcademicCourse course = new AcademicCourse(
+                INSTITUTION_ID, TEACHER_ID, ACADEMIC_YEAR_ID, PLATFORM, "course-001", "Física", "Old subject");
+
+        when(courseRepository.findByInstitutionIdAndPlatformCodeAndExternalId(INSTITUTION_ID, PLATFORM, "course-001"))
+                .thenReturn(Optional.of(course));
+        when(courseRepository.save(course)).thenReturn(course);
+
+        CourseRosterSynchronizer synchronizer = synchronizer(courseRepository);
+
+        AcademicCourse result = synchronizer.synchronize(
+                INSTITUTION_ID,
+                TEACHER_ID,
+                PLATFORM,
+                platformCourse("Primer Curso A, Bachillerato General Unificado", "Física"),
+                ACADEMIC_YEAR_ID);
+
+        assertSame(course, result);
+        assertEquals("Primer Curso A, Bachillerato General Unificado", course.getName());
+        assertEquals("Física", course.getSubject());
+        verify(courseRepository).save(course);
+    }
+
+    @Test
+    void doesNotSaveExistingCourseWhenYearAndMetadataAreUnchanged() {
+        AcademicCourseRepository courseRepository = mock(AcademicCourseRepository.class);
+        AcademicCourse course = new AcademicCourse(
+                INSTITUTION_ID, TEACHER_ID, ACADEMIC_YEAR_ID, PLATFORM, "course-001", "Course", "Physics");
+
+        when(courseRepository.findByInstitutionIdAndPlatformCodeAndExternalId(INSTITUTION_ID, PLATFORM, "course-001"))
+                .thenReturn(Optional.of(course));
+
+        CourseRosterSynchronizer synchronizer = synchronizer(courseRepository);
+
+        AcademicCourse result =
+                synchronizer.synchronize(INSTITUTION_ID, TEACHER_ID, PLATFORM, platformCourse(), ACADEMIC_YEAR_ID);
+
+        assertSame(course, result);
+        verify(courseRepository, never()).save(course);
     }
 
     @Test
     void refusesToReassignCourseToDifferentAcademicYear() {
         AcademicCourseRepository courseRepository = mock(AcademicCourseRepository.class);
         AcademicCourse course = new AcademicCourse(
-                INSTITUTION_ID, TEACHER_ID, ACADEMIC_YEAR_ID, PLATFORM, "course-001", "Course", "Physics");
+                INSTITUTION_ID, TEACHER_ID, ACADEMIC_YEAR_ID, PLATFORM, "course-001", "Stale Course", "Stale Subject");
 
         when(courseRepository.findByInstitutionIdAndPlatformCodeAndExternalId(INSTITUTION_ID, PLATFORM, "course-001"))
                 .thenReturn(Optional.of(course));
@@ -63,6 +108,8 @@ class CourseRosterSynchronizerTest {
                         INSTITUTION_ID, TEACHER_ID, PLATFORM, platformCourse(), OTHER_ACADEMIC_YEAR_ID));
 
         assertEquals("Course course-001 is already associated with a different academic year", exception.getMessage());
+        assertEquals("Stale Course", course.getName());
+        assertEquals("Stale Subject", course.getSubject());
         verify(courseRepository, never()).save(course);
     }
 
@@ -72,6 +119,10 @@ class CourseRosterSynchronizerTest {
     }
 
     private static PlatformCourseSnapshot platformCourse() {
-        return new PlatformCourseSnapshot("course-001", "Course", "Physics", null, List.of(), List.of());
+        return platformCourse("Course", "Physics");
+    }
+
+    private static PlatformCourseSnapshot platformCourse(String name, String subject) {
+        return new PlatformCourseSnapshot("course-001", name, subject, null, List.of(), List.of());
     }
 }

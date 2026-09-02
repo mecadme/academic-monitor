@@ -17,7 +17,13 @@ public final class IdukayCourseMapper {
 
         String externalId = requireText(course.id(), "course._id");
 
-        String name = requireText(course.name(), "course.name");
+        String name = course.referenceName();
+
+        if (name == null || name.isBlank()) {
+            name = requireText(course.name(), "course.name");
+        } else {
+            name = name.trim();
+        }
 
         if (course.subject() == null) {
             throw new IdukayApiException("Idukay course did not contain a subject");

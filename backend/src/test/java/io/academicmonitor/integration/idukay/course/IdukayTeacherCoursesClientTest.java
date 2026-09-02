@@ -54,8 +54,8 @@ class IdukayTeacherCoursesClientTest {
                               "response": [
                                 {
                                   "_id": "course-test-001",
-                                  "name": "1.º BGU A",
-                                  "reference_name": "1 BGU A",
+                                  "name": "Física",
+                                  "reference_name": "Primer Curso A, Bachillerato General Unificado",
                                   "code": "1BGUA-FIS",
                                   "custom_year": "custom-year-test-001",
                                   "subject": {
@@ -85,8 +85,8 @@ class IdukayTeacherCoursesClientTest {
                                 },
                                 {
                                   "_id": "course-test-002",
-                                  "name": "2.º BGU B",
-                                  "reference_name": "2 BGU B",
+                                  "name": "Física",
+                                  "reference_name": "Segundo Curso B, Bachillerato General Unificado",
                                   "code": "2BGUB-FIS",
                                   "custom_year": "custom-year-test-001",
                                   "subject": {
@@ -125,9 +125,9 @@ class IdukayTeacherCoursesClientTest {
 
         assertEquals("course-test-001", first.id());
 
-        assertEquals("1.º BGU A", first.name());
+        assertEquals("Física", first.name());
 
-        assertEquals("1 BGU A", first.referenceName());
+        assertEquals("Primer Curso A, Bachillerato General Unificado", first.referenceName());
 
         assertEquals("1BGUA-FIS", first.code());
 
@@ -147,7 +147,7 @@ class IdukayTeacherCoursesClientTest {
 
         assertEquals("course-test-001", snapshot.externalId());
 
-        assertEquals("1.º BGU A", snapshot.name());
+        assertEquals("Primer Curso A, Bachillerato General Unificado", snapshot.name());
 
         assertEquals("Física", snapshot.subject());
 
@@ -176,6 +176,27 @@ class IdukayTeacherCoursesClientTest {
         assertEquals("custom-year-test-001", second.customYear());
 
         assertTrue(second.students().isEmpty());
+    }
+
+    @Test
+    void mapperFallsBackToNameWhenReferenceNameIsAbsent() {
+
+        IdukayTeacherCourseDto course = new IdukayTeacherCourseDto(
+                "course-test-001",
+                "Física",
+                null,
+                "1BGUA-FIS",
+                new IdukaySubjectDto("subject-test-001", "Física"),
+                null,
+                List.of());
+
+        PlatformCourseSnapshot snapshot = IdukayCourseMapper.toSnapshot(course);
+
+        assertEquals("course-test-001", snapshot.externalId());
+
+        assertEquals("Física", snapshot.name());
+
+        assertEquals("Física", snapshot.subject());
     }
 
     @Test
