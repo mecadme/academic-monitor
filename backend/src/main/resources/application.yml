@@ -18,6 +18,10 @@ spring:
     open-in-view: false
 
 app:
+  bootstrap:
+    user-email: ${APP_BOOTSTRAP_USER_EMAIL:local.teacher@academicmonitor.local}
+    institution-name: ${APP_BOOTSTRAP_INSTITUTION_NAME:Academic Monitor Local}
+    timezone: ${APP_BOOTSTRAP_TIMEZONE:America/Guayaquil}
   ollama:
     base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
   cors:

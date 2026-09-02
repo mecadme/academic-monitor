@@ -9,13 +9,15 @@ import { IdukayIntegrationCard } from './features/dashboard/components/IdukayInt
 import { useIdukayIntegration } from './features/idukay/hooks/useIdukayIntegration';
 
 import { AppHeader } from './components/layout/AppHeader';
+import { useAcademicContext } from './features/context/hooks/useAcademicContext';
 
 function App() {
+  const context = useAcademicContext();
   const demo = useDemoDashboard();
 
   const idukay = useIdukayIntegration({
-    institutionId: demo.institutionId,
-    teacherUserId: demo.teacherUserId,
+    institutionId: context.institutionId,
+    teacherUserId: context.teacherUserId,
   });
 
   if (demo.loading) {
@@ -72,7 +74,7 @@ function App() {
   }
 
   const displayedError =
-    demo.error ?? idukay.error;
+    demo.error ?? context.error ?? idukay.error;
 
   return (
     <main className="app-shell">
