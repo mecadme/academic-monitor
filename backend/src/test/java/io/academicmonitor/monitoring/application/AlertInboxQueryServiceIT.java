@@ -1,6 +1,9 @@
 package io.academicmonitor.monitoring.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.academicmonitor.academic.domain.AcademicCourse;
 import io.academicmonitor.academic.domain.AcademicCourseRepository;
@@ -30,6 +33,9 @@ class AlertInboxQueryServiceIT extends PostgresIntegrationTest {
 
     @Autowired
     private AlertInboxQueryService service;
+
+    @Autowired
+    private AlertTriageService triageService;
 
     @Autowired
     private InstitutionRepository institutionRepository;
@@ -133,27 +139,32 @@ class AlertInboxQueryServiceIT extends PostgresIntegrationTest {
         Activity otherTeacherActivity = saveActivity(
                 otherTeacherCourse, otherTeacherPeriod, "hidden-teacher-activity", "Hidden teacher activity");
 
-        alertRepository.save(alert(institution, chemistry, chemistryActivity, bruno, AlertSeverity.CRITICAL, "4.50"));
-        alertRepository.save(alert(institution, physics, physicsActivity, ana, AlertSeverity.WARNING, "6.50"));
+        Alert criticalAlert = alert(institution, chemistry, chemistryActivity, bruno, AlertSeverity.CRITICAL, "4.50");
+        alertRepository.save(criticalAlert);
+        Alert acknowledgedWarning = alert(institution, physics, physicsActivity, ana, AlertSeverity.WARNING, "6.50");
+        acknowledgedWarning.acknowledge();
+        alertRepository.save(acknowledgedWarning);
 
         Alert resolved = alert(institution, physics, physicsActivity, bruno, AlertSeverity.CRITICAL, "3.00");
         resolved.resolve();
         alertRepository.save(resolved);
 
-        alertRepository.save(alert(
+        Alert foreignInstitutionAlert = alert(
                 otherInstitution,
                 otherInstitutionCourse,
                 otherInstitutionActivity,
                 hiddenInstitutionStudent,
                 AlertSeverity.CRITICAL,
-                "1.00"));
-        alertRepository.save(alert(
+                "1.00");
+        alertRepository.save(foreignInstitutionAlert);
+        Alert otherTeacherAlert = alert(
                 institution,
                 otherTeacherCourse,
                 otherTeacherActivity,
                 hiddenTeacherStudent,
                 AlertSeverity.CRITICAL,
-                "2.00"));
+                "2.00");
+        alertRepository.save(otherTeacherAlert);
 
         entityManager.flush();
         entityManager.clear();
@@ -184,6 +195,22 @@ class AlertInboxQueryServiceIT extends PostgresIntegrationTest {
         assertEquals(AlertSeverity.WARNING, warning.severity());
         assertEquals(physics.getId(), warning.course().id());
         assertEquals(ana.getId(), warning.student().id());
+        assertNotNull(warning.acknowledgedAt());
+
+        AlertInboxResponse pending =
+                service.getInbox(institution.getId(), teacher.getId(), null, null, AlertAttentionState.PENDING);
+        assertEquals(1, pending.total());
+        assertEquals(criticalAlert.getId(), pending.alerts().getFirst().id());
+
+        AlertInboxResponse acknowledged = service.getInbox(
+                institution.getId(),
+                teacher.getId(),
+                physics.getId(),
+                periodT1.getId(),
+                AlertAttentionState.ACKNOWLEDGED);
+        assertEquals(1, acknowledged.total());
+        assertEquals(
+                acknowledgedWarning.getId(), acknowledged.alerts().getFirst().id());
 
         AlertInboxResponse foreignFilter =
                 service.getInbox(institution.getId(), teacher.getId(), otherTeacherCourse.getId());
@@ -209,6 +236,29 @@ class AlertInboxQueryServiceIT extends PostgresIntegrationTest {
         AlertInboxResponse otherTeacherPeriodFilter =
                 service.getInbox(institution.getId(), teacher.getId(), null, otherTeacherPeriod.getId());
         assertEquals(0, otherTeacherPeriodFilter.total());
+
+        triageService.markPending(institution.getId(), teacher.getId(), acknowledgedWarning.getId());
+        Alert pendingAgain =
+                alertRepository.findById(acknowledgedWarning.getId()).orElseThrow();
+        assertTrue(pendingAgain.isPending());
+
+        triageService.acknowledge(institution.getId(), teacher.getId(), acknowledgedWarning.getId());
+        Alert acknowledgedAgain =
+                alertRepository.findById(acknowledgedWarning.getId()).orElseThrow();
+        assertTrue(acknowledgedAgain.isAcknowledged());
+
+        assertThrows(
+                AlertTriageNotFoundException.class,
+                () -> triageService.acknowledge(institution.getId(), teacher.getId(), foreignInstitutionAlert.getId()));
+        assertThrows(
+                AlertTriageNotFoundException.class,
+                () -> triageService.acknowledge(institution.getId(), teacher.getId(), otherTeacherAlert.getId()));
+        assertThrows(
+                AlertTriageConflictException.class,
+                () -> triageService.acknowledge(institution.getId(), teacher.getId(), resolved.getId()));
+        assertThrows(
+                AlertTriageConflictException.class,
+                () -> triageService.markPending(institution.getId(), teacher.getId(), resolved.getId()));
     }
 
     private AcademicCourse saveCourse(

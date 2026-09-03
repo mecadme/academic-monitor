@@ -18,7 +18,10 @@ import {
 import type { AcademicDashboardCourse } from '../../dashboard/api/fetchAcademicDashboard';
 import type { AcademicPeriod } from '../api/fetchAcademicPeriods';
 import type { AlertInbox } from '../api/fetchAlertInbox';
-import { formatAlertDueDate } from '../lib/formatAlert';
+import {
+  formatAcknowledgedAt,
+  formatAlertDueDate,
+} from '../lib/formatAlert';
 import { AlertInboxPanel } from './AlertInboxPanel';
 
 const courses: AcademicDashboardCourse[] = [
@@ -73,6 +76,7 @@ const populatedInbox: AlertInbox = {
       severity: 'CRITICAL',
       ruleCode: 'LOW_GRADE',
       score: 1,
+      acknowledgedAt: null,
       course: {
         id: 'course-1',
         name: 'Primer Curso A, Bachillerato General Unificado',
@@ -86,7 +90,7 @@ const populatedInbox: AlertInbox = {
       },
       student: {
         id: 'student-external-id',
-        name: 'Xavi Paul Ruilova Saquicili',
+        name: 'Lucía Vega',
       },
     },
     {
@@ -94,6 +98,7 @@ const populatedInbox: AlertInbox = {
       severity: 'WARNING',
       ruleCode: 'LOW_GRADE',
       score: 4.5,
+      acknowledgedAt: '2026-09-02T18:30:00Z',
       course: {
         id: 'course-2',
         name: 'Segundo Curso B, Bachillerato General Unificado',
@@ -121,7 +126,7 @@ describe('AlertInboxPanel', () => {
     expect(screen.getByText('Crítica')).toBeInTheDocument();
     expect(screen.getByText('Advertencia')).toBeInTheDocument();
     expect(
-      screen.getByText('Xavi Paul Ruilova Saquicili'),
+      screen.getByText('Lucía Vega'),
     ).toBeInTheDocument();
     expect(
       screen.getByText('Transformación de unidades'),
@@ -139,7 +144,7 @@ describe('AlertInboxPanel', () => {
     const rows = screen.getAllByRole('article');
     expect(
       within(rows[0]).getByText(
-        'Xavi Paul Ruilova Saquicili',
+        'Lucía Vega',
       ),
     ).toBeInTheDocument();
     expect(
@@ -168,19 +173,12 @@ describe('AlertInboxPanel', () => {
 
       return (
         <AlertInboxPanel
-          courses={courses}
-          periods={periods}
-          inbox={populatedInbox}
-          loading={false}
-          error={null}
+          {...defaultProps}
           selectedCourseId={selectedCourseId}
-          selectedAcademicPeriodId={null}
           onCourseChange={(courseId) => {
             setSelectedCourseId(courseId);
             onCourseChange(courseId);
           }}
-          onAcademicPeriodChange={vi.fn()}
-          onRetry={vi.fn()}
         />
       );
     }
@@ -332,7 +330,7 @@ describe('AlertInboxPanel', () => {
       'Actualizando alertas…',
     );
     expect(
-      screen.getByText('Xavi Paul Ruilova Saquicili'),
+      screen.getByText('Lucía Vega'),
     ).toBeInTheDocument();
   });
 
@@ -354,6 +352,95 @@ describe('AlertInboxPanel', () => {
     expect(screen.queryByText('LOW_GRADE')).not.toBeInTheDocument();
     expect(screen.queryByText(/idukay/i)).not.toBeInTheDocument();
   });
+
+  it('renders the active triage count and exposes all attention filters', async () => {
+    const user = userEvent.setup();
+    const onAttentionStateChange = vi.fn();
+
+    renderPanel({
+      inbox: populatedInbox,
+      attentionState: 'PENDING',
+      onAttentionStateChange,
+    });
+
+    expect(screen.getByText('2 pendientes')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Pendientes' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Atendidas' }),
+    );
+    expect(onAttentionStateChange).toHaveBeenCalledWith('ACKNOWLEDGED');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Todas activas' }),
+    );
+    expect(onAttentionStateChange).toHaveBeenCalledWith('ALL');
+  });
+
+  it('shows attention state, acknowledgement time and the matching row actions', async () => {
+    const user = userEvent.setup();
+    const onAcknowledge = vi.fn();
+    const onMarkPending = vi.fn();
+
+    renderPanel({ onAcknowledge, onMarkPending });
+
+    const rows = screen.getAllByRole('article');
+    expect(within(rows[0]).getByText('Pendiente')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Atendida')).toBeInTheDocument();
+    expect(within(rows[1]).getByText(
+      `Atendida el ${formatAcknowledgedAt('2026-09-02T18:30:00Z')}`,
+    )).toBeInTheDocument();
+
+    await user.click(
+      within(rows[0]).getByRole('button', {
+        name: 'Marcar como atendida',
+      }),
+    );
+    expect(onAcknowledge).toHaveBeenCalledWith('alert-critical-id');
+
+    await user.click(
+      within(rows[1]).getByRole('button', {
+        name: 'Marcar como pendiente',
+      }),
+    );
+    expect(onMarkPending).toHaveBeenCalledWith('alert-warning-id');
+  });
+
+  it('disables only the alert whose action is in flight', () => {
+    renderPanel({ actionAlertIds: new Set(['alert-critical-id']) });
+
+    const rows = screen.getAllByRole('article');
+    expect(
+      within(rows[0]).getByRole('button', { name: 'Actualizando…' }),
+    ).toBeDisabled();
+    expect(
+      within(rows[1]).getByRole('button', {
+        name: 'Marcar como pendiente',
+      }),
+    ).toBeEnabled();
+  });
+
+  it('keeps rows visible when an action fails and provides a local retry', async () => {
+    const user = userEvent.setup();
+    const onRetryAction = vi.fn();
+
+    renderPanel({
+      actionError: 'No se pudo marcar la alerta como atendida.',
+      onRetryAction,
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'No se pudo marcar la alerta como atendida.',
+    );
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Reintentar acción' }),
+    );
+    expect(onRetryAction).toHaveBeenCalledTimes(1);
+  });
 });
 
 const defaultProps = {
@@ -362,11 +449,18 @@ const defaultProps = {
   inbox: populatedInbox,
   loading: false,
   error: null,
+  actionError: null,
+  actionAlertIds: new Set<string>(),
   selectedCourseId: null,
   selectedAcademicPeriodId: null,
+  attentionState: 'ALL' as const,
   onCourseChange: vi.fn(),
   onAcademicPeriodChange: vi.fn(),
+  onAttentionStateChange: vi.fn(),
   onRetry: vi.fn(),
+  onRetryAction: vi.fn(),
+  onAcknowledge: vi.fn(),
+  onMarkPending: vi.fn(),
 };
 
 function renderPanel(

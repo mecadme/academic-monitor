@@ -1,4 +1,8 @@
 export type AlertSeverity = 'CRITICAL' | 'WARNING';
+export type AlertAttentionState =
+  | 'PENDING'
+  | 'ACKNOWLEDGED'
+  | 'ALL';
 
 export type AlertInbox = {
   institutionId: string;
@@ -12,6 +16,7 @@ export type AlertInboxItem = {
   severity: AlertSeverity;
   ruleCode: string;
   score: number;
+  acknowledgedAt: string | null;
   course: {
     id: string;
     name: string;
@@ -34,6 +39,7 @@ export type FetchAlertInboxInput = {
   teacherUserId: string;
   courseId?: string | null;
   academicPeriodId?: string | null;
+  attentionState?: AlertAttentionState;
   signal?: AbortSignal;
 };
 
@@ -46,6 +52,7 @@ export async function fetchAlertInbox({
   teacherUserId,
   courseId,
   academicPeriodId,
+  attentionState,
   signal,
 }: FetchAlertInboxInput): Promise<AlertInbox> {
   const query = new URLSearchParams({
@@ -59,6 +66,10 @@ export async function fetchAlertInbox({
 
   if (academicPeriodId) {
     query.set('academicPeriodId', academicPeriodId);
+  }
+
+  if (attentionState) {
+    query.set('attentionState', attentionState);
   }
 
   const response = await fetch(

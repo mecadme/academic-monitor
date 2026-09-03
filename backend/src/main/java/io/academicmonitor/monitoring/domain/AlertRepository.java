@@ -9,6 +9,8 @@ public interface AlertRepository {
 
     Alert save(Alert alert);
 
+    Optional<Alert> findById(UUID alertId);
+
     Optional<Alert> findByActivityIdAndStudentIdAndRuleCodeAndStatus(
             UUID activityId, UUID studentId, String ruleCode, AlertStatus status);
 

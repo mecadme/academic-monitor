@@ -9,6 +9,7 @@ import io.academicmonitor.monitoring.domain.Alert;
 import io.academicmonitor.monitoring.domain.AlertRepository;
 import io.academicmonitor.monitoring.domain.AlertSeverity;
 import io.academicmonitor.monitoring.domain.AlertStatus;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -27,15 +28,20 @@ class SyncAlertSummaryServiceTest {
     private AlertRepository alertRepository;
 
     @Mock
-    private Alert warning;
-
-    @Mock
     private Alert critical;
 
     @Test
     void summarizesOpenAlertsOnlyForProcessedActivities() {
 
-        when(warning.getSeverity()).thenReturn(AlertSeverity.WARNING);
+        Alert warning = new Alert(
+                UUID.randomUUID(),
+                COURSE_ID,
+                ACTIVITY_ID,
+                UUID.randomUUID(),
+                "LOW_GRADE",
+                AlertSeverity.WARNING,
+                new BigDecimal("6.50"));
+        warning.acknowledge();
         when(critical.getSeverity()).thenReturn(AlertSeverity.CRITICAL);
 
         when(alertRepository.findByCourseIdAndStatusAndActivityIdIn(COURSE_ID, AlertStatus.OPEN, List.of(ACTIVITY_ID)))

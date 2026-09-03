@@ -11,7 +11,10 @@ import {
   vi,
 } from 'vitest';
 
-import type { AlertInbox } from '../api/fetchAlertInbox';
+import type {
+  AlertAttentionState,
+  AlertInbox,
+} from '../api/fetchAlertInbox';
 import { useAlertInbox } from './useAlertInbox';
 
 const allCoursesInbox = inbox(
@@ -85,7 +88,7 @@ describe('useAlertInbox', () => {
 
     const [url, request] = fetchMock.mock.calls[0];
     expect(String(url)).toContain(
-      '/api/v1/alerts?institutionId=institution-1&teacherUserId=teacher-1',
+      '/api/v1/alerts?institutionId=institution-1&teacherUserId=teacher-1&attentionState=PENDING',
     );
     expect(String(url)).not.toContain('courseId=');
     expect(request).toMatchObject({
@@ -216,6 +219,46 @@ describe('useAlertInbox', () => {
     );
   });
 
+  it('composes attention state with course and period filters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(allCoursesInbox),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { rerender } = renderHook(
+      ({ attentionState }: { attentionState: AlertAttentionState }) =>
+        useAlertInbox({
+          institutionId: 'institution-1',
+          teacherUserId: 'teacher-1',
+          courseId: 'course-2',
+          academicPeriodId: 'period-t1-internal',
+          attentionState,
+        }),
+      {
+        initialProps: {
+          attentionState: 'PENDING' as AlertAttentionState,
+        },
+      },
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      'courseId=course-2&academicPeriodId=period-t1-internal&attentionState=PENDING',
+    );
+
+    rerender({ attentionState: 'ACKNOWLEDGED' });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
+      'attentionState=ACKNOWLEDGED',
+    );
+
+    rerender({ attentionState: 'ALL' });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(String(fetchMock.mock.calls[2][0])).toContain(
+      'attentionState=ALL',
+    );
+  });
+
   it('prevents an older request from replacing a newer course result', async () => {
     const firstRequest = deferred<Response>();
     const secondRequest = deferred<Response>();
@@ -308,6 +351,154 @@ describe('useAlertInbox', () => {
     expect(result.current.inbox).toEqual(allCoursesInbox);
     expect(result.current.error).toBeNull();
   });
+
+  it('acknowledges with only alert and academic context IDs, then refreshes the current query', async () => {
+    const refreshedInbox = { ...allCoursesInbox, total: 0, alerts: [] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(allCoursesInbox))
+      .mockResolvedValueOnce(commandResponse())
+      .mockResolvedValueOnce(jsonResponse(refreshedInbox));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() =>
+      useAlertInbox({
+        institutionId: 'institution-1',
+        teacherUserId: 'teacher-1',
+        courseId: 'course-2',
+        academicPeriodId: 'period-t1-internal',
+        attentionState: 'PENDING',
+      }),
+    );
+
+    await waitFor(() => expect(result.current.inbox).toEqual(allCoursesInbox));
+
+    await act(async () => {
+      await result.current.acknowledge('alert-all');
+    });
+
+    const [commandUrl, commandRequest] = fetchMock.mock.calls[1];
+    expect(String(commandUrl)).toContain(
+      '/api/v1/alerts/alert-all/acknowledge?institutionId=institution-1&teacherUserId=teacher-1',
+    );
+    expect(String(commandUrl)).not.toContain('courseId=');
+    expect(String(commandUrl)).not.toContain('academicPeriodId=');
+    expect(String(commandUrl)).not.toMatch(/idukay|external/i);
+    expect(commandRequest).toMatchObject({ method: 'POST' });
+    expect(String(fetchMock.mock.calls[2][0])).toContain(
+      'courseId=course-2&academicPeriodId=period-t1-internal&attentionState=PENDING',
+    );
+    expect(result.current.inbox).toEqual(refreshedInbox);
+  });
+
+  it('marks an acknowledged alert pending and refreshes the current query', async () => {
+    const acknowledgedInbox = {
+      ...allCoursesInbox,
+      alerts: allCoursesInbox.alerts.map((alert) => ({
+        ...alert,
+        acknowledgedAt: '2026-09-02T18:30:00Z',
+      })),
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(acknowledgedInbox))
+      .mockResolvedValueOnce(commandResponse())
+      .mockResolvedValueOnce(jsonResponse({ ...acknowledgedInbox, total: 0, alerts: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() =>
+      useAlertInbox({
+        institutionId: 'institution-1',
+        teacherUserId: 'teacher-1',
+        attentionState: 'ACKNOWLEDGED',
+      }),
+    );
+
+    await waitFor(() => expect(result.current.inbox).toEqual(acknowledgedInbox));
+    await act(async () => {
+      await result.current.markPending('alert-all');
+    });
+
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
+      '/api/v1/alerts/alert-all/mark-pending?institutionId=institution-1&teacherUserId=teacher-1',
+    );
+    expect(String(fetchMock.mock.calls[2][0])).toContain(
+      'attentionState=ACKNOWLEDGED',
+    );
+  });
+
+  it('preserves the inbox and supports retry after an action failure', async () => {
+    const refreshedInbox = { ...allCoursesInbox, total: 0, alerts: [] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(allCoursesInbox))
+      .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
+      .mockResolvedValueOnce(commandResponse())
+      .mockResolvedValueOnce(jsonResponse(refreshedInbox));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() =>
+      useAlertInbox({
+        institutionId: 'institution-1',
+        teacherUserId: 'teacher-1',
+      }),
+    );
+
+    await waitFor(() => expect(result.current.inbox).toEqual(allCoursesInbox));
+    await act(async () => {
+      await result.current.acknowledge('alert-all');
+    });
+
+    expect(result.current.inbox).toEqual(allCoursesInbox);
+    expect(result.current.actionError).toContain('(503)');
+    expect(result.current.actionAlertIds.has('alert-all')).toBe(false);
+
+    await act(async () => {
+      await result.current.retryAction();
+    });
+    expect(result.current.actionError).toBeNull();
+    expect(result.current.inbox).toEqual(refreshedInbox);
+  });
+
+  it('does not refresh an obsolete scope when a mutation finishes after filters change', async () => {
+    const command = deferred<Response>();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(allCoursesInbox))
+      .mockReturnValueOnce(command.promise)
+      .mockResolvedValueOnce(jsonResponse(filteredInbox));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result, rerender } = renderHook(
+      ({ academicPeriodId }: { academicPeriodId: string }) =>
+        useAlertInbox({
+          institutionId: 'institution-1',
+          teacherUserId: 'teacher-1',
+          academicPeriodId,
+          attentionState: 'PENDING',
+        }),
+      { initialProps: { academicPeriodId: 'period-t2-internal' } },
+    );
+
+    await waitFor(() => expect(result.current.inbox).toEqual(allCoursesInbox));
+
+    let action!: Promise<void>;
+    act(() => {
+      action = result.current.acknowledge('alert-all');
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    rerender({ academicPeriodId: 'period-t3-internal' });
+    await waitFor(() => expect(result.current.inbox).toEqual(filteredInbox));
+
+    await act(async () => {
+      command.resolve(commandResponse());
+      await action;
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(result.current.inbox).toEqual(filteredInbox);
+  });
 });
 
 function inbox(
@@ -324,6 +515,7 @@ function inbox(
         severity: 'CRITICAL',
         ruleCode: 'LOW_GRADE',
         score: 4.5,
+        acknowledgedAt: null,
         course: {
           id: 'course-1',
           name: courseName,
@@ -349,6 +541,10 @@ function jsonResponse(value: AlertInbox) {
     ok: true,
     json: async () => value,
   } as Response;
+}
+
+function commandResponse() {
+  return { ok: true, status: 204 } as Response;
 }
 
 function deferred<T>() {

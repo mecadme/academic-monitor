@@ -50,6 +50,9 @@ public class Alert {
     @Column(name = "resolved_at")
     private Instant resolvedAt;
 
+    @Column(name = "acknowledged_at")
+    private Instant acknowledgedAt;
+
     protected Alert() {}
 
     public Alert(
@@ -76,6 +79,24 @@ public class Alert {
 
         status = AlertStatus.RESOLVED;
         resolvedAt = Instant.now();
+    }
+
+    public boolean acknowledge() {
+        if (!isOpen() || acknowledgedAt != null) {
+            return false;
+        }
+
+        acknowledgedAt = Instant.now();
+        return true;
+    }
+
+    public boolean markPending() {
+        if (!isOpen() || acknowledgedAt == null) {
+            return false;
+        }
+
+        acknowledgedAt = null;
+        return true;
     }
 
     public UUID getId() {
@@ -114,13 +135,29 @@ public class Alert {
         return scoreSnapshot;
     }
 
+    public Instant getAcknowledgedAt() {
+        return acknowledgedAt;
+    }
+
     public boolean isOpen() {
         return status == AlertStatus.OPEN;
+    }
+
+    public boolean isAcknowledged() {
+        return acknowledgedAt != null;
+    }
+
+    public boolean isPending() {
+        return isOpen() && acknowledgedAt == null;
     }
 
     public void refresh(AlertSeverity severity, BigDecimal scoreSnapshot) {
         if (severity == null || scoreSnapshot == null) {
             throw new IllegalArgumentException("severity and scoreSnapshot are required");
+        }
+
+        if (isOpen() && this.severity == AlertSeverity.WARNING && severity == AlertSeverity.CRITICAL) {
+            acknowledgedAt = null;
         }
 
         this.severity = severity;
