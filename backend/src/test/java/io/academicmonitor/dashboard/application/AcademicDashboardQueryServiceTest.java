@@ -19,6 +19,7 @@ import io.academicmonitor.monitoring.domain.Alert;
 import io.academicmonitor.monitoring.domain.AlertRepository;
 import io.academicmonitor.monitoring.domain.AlertSeverity;
 import io.academicmonitor.monitoring.domain.AlertStatus;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -81,8 +82,17 @@ class AcademicDashboardQueryServiceTest {
                 enrollment(COURSE_B_ID, STUDENT_B_ID),
                 enrollment(COURSE_B_ID, STUDENT_SHARED_ID));
         List<Activity> activities = List.of(activity(COURSE_A_ID), activity(COURSE_A_ID), activity(COURSE_B_ID));
+        Alert acknowledgedWarning = new Alert(
+                INSTITUTION_ID,
+                COURSE_A_ID,
+                UUID.randomUUID(),
+                STUDENT_A_ID,
+                "LOW_GRADE",
+                AlertSeverity.WARNING,
+                new BigDecimal("6.50"));
+        acknowledgedWarning.acknowledge();
         List<Alert> openAlerts = List.of(
-                alert(COURSE_A_ID, AlertSeverity.WARNING),
+                acknowledgedWarning,
                 alert(COURSE_A_ID, AlertSeverity.CRITICAL),
                 alert(COURSE_B_ID, AlertSeverity.WARNING));
         AcademicYear academicYear = mock(AcademicYear.class);

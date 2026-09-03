@@ -56,13 +56,24 @@ public class AlertInboxQueryService {
 
     @Transactional(readOnly = true)
     public AlertInboxResponse getInbox(UUID institutionId, UUID teacherUserId, UUID courseId) {
-        return getInbox(institutionId, teacherUserId, courseId, null);
+        return getInbox(institutionId, teacherUserId, courseId, null, AlertAttentionState.ALL);
     }
 
     @Transactional(readOnly = true)
     public AlertInboxResponse getInbox(UUID institutionId, UUID teacherUserId, UUID courseId, UUID academicPeriodId) {
+        return getInbox(institutionId, teacherUserId, courseId, academicPeriodId, AlertAttentionState.ALL);
+    }
+
+    @Transactional(readOnly = true)
+    public AlertInboxResponse getInbox(
+            UUID institutionId,
+            UUID teacherUserId,
+            UUID courseId,
+            UUID academicPeriodId,
+            AlertAttentionState attentionState) {
         Objects.requireNonNull(institutionId, "institutionId is required");
         Objects.requireNonNull(teacherUserId, "teacherUserId is required");
+        AlertAttentionState effectiveAttentionState = attentionState == null ? AlertAttentionState.ALL : attentionState;
 
         List<AcademicCourse> allowedCourses =
                 courseRepository.findByInstitutionIdAndTeacherUserId(institutionId, teacherUserId);
@@ -87,6 +98,7 @@ public class AlertInboxQueryService {
                         .filter(Alert::isOpen)
                         .filter(alert -> institutionId.equals(alert.getInstitutionId()))
                         .filter(alert -> coursesById.containsKey(alert.getCourseId()))
+                        .filter(effectiveAttentionState::includes)
                         .filter(alert -> alert.getId() != null)
                         .collect(Collectors.collectingAndThen(
                                 Collectors.toMap(
@@ -172,6 +184,7 @@ public class AlertInboxQueryService {
                 alert.getSeverity(),
                 alert.getRuleCode(),
                 alert.getScoreSnapshot(),
+                alert.getAcknowledgedAt(),
                 new AlertInboxResponse.CourseSummary(course.getId(), course.getName(), course.getSubject()),
                 new AlertInboxResponse.ActivitySummary(
                         activity.getId(), activity.getName(), activity.getMaxScore(), activity.getDueDate()),

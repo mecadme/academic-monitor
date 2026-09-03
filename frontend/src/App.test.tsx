@@ -172,7 +172,7 @@ describe('App', () => {
     );
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(
-        '/api/v1/alerts?institutionId=context-institution&teacherUserId=context-teacher&academicPeriodId=academic-period-t1',
+        '/api/v1/alerts?institutionId=context-institution&teacherUserId=context-teacher&academicPeriodId=academic-period-t1&attentionState=PENDING',
       ),
       expect.objectContaining({
         method: 'GET',
@@ -450,6 +450,52 @@ describe('App', () => {
       expect(String(alertCalls.at(-1)?.[0])).not.toContain(
         'academicPeriodId=academic-period-t1',
       );
+    });
+  });
+
+  it('preserves the active triage filter while switching to the synchronized period', async () => {
+    const user = userEvent.setup();
+    const fetchMock = createFetchMock({
+      syncAcademicPeriodId: 'academic-period-t2',
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'Resumen por curso' });
+    await user.click(
+      screen.getByRole('button', { name: 'Atendidas' }),
+    );
+    await waitFor(() => {
+      const alertCalls = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/api/v1/alerts?'),
+      );
+      expect(String(alertCalls.at(-1)?.[0])).toContain(
+        'attentionState=ACKNOWLEDGED',
+      );
+    });
+
+    await connectIdukay(user);
+    await user.selectOptions(
+      screen.getByLabelText(/odo a sincronizar/i),
+      'period-t2',
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Sincronizar T2' }),
+    );
+
+    await waitFor(() => {
+      const alertCalls = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/api/v1/alerts?'),
+      );
+      const latestUrl = String(alertCalls.at(-1)?.[0]);
+      expect(latestUrl).toContain(
+        'academicPeriodId=academic-period-t2',
+      );
+      expect(latestUrl).toContain('attentionState=ACKNOWLEDGED');
+      expect(
+        screen.getByRole('button', { name: 'Atendidas' }),
+      ).toHaveAttribute('aria-pressed', 'true');
     });
   });
 

@@ -8,6 +8,7 @@ import {
 } from 'react';
 
 import { AlertInboxPanel } from './features/alerts/components/AlertInboxPanel';
+import type { AlertAttentionState } from './features/alerts/api/fetchAlertInbox';
 import { useAcademicPeriods } from './features/alerts/hooks/useAcademicPeriods';
 import { useAlertInbox } from './features/alerts/hooks/useAlertInbox';
 import { AcademicCoursePanel } from './features/dashboard/components/AcademicCoursePanel';
@@ -27,6 +28,8 @@ function App() {
     useState<string | null>(null);
   const [selectedAcademicPeriodId, setSelectedAcademicPeriodId] =
     useState<string | null>(null);
+  const [selectedAlertAttentionState, setSelectedAlertAttentionState] =
+    useState<AlertAttentionState>('PENDING');
   const [periodSelectionScope, setPeriodSelectionScope] =
     useState<string | null>(null);
   const initializedPeriodScope = useRef<string | null>(null);
@@ -55,6 +58,7 @@ function App() {
       : null,
     courseId: selectedAlertCourseId,
     academicPeriodId: selectedAcademicPeriodId,
+    attentionState: selectedAlertAttentionState,
   });
 
   useEffect(() => {
@@ -295,11 +299,18 @@ function App() {
         inbox={alertInbox.inbox}
         loading={academicPeriods.loading || alertInbox.loading}
         error={academicPeriods.error ?? alertInbox.error}
+        actionError={alertInbox.actionError}
+        actionAlertIds={alertInbox.actionAlertIds}
         selectedCourseId={selectedAlertCourseId}
         selectedAcademicPeriodId={selectedAcademicPeriodId}
+        attentionState={selectedAlertAttentionState}
         onCourseChange={setSelectedAlertCourseId}
         onAcademicPeriodChange={setSelectedAcademicPeriodId}
+        onAttentionStateChange={setSelectedAlertAttentionState}
         onRetry={retryAlertPanel}
+        onRetryAction={alertInbox.retryAction}
+        onAcknowledge={alertInbox.acknowledge}
+        onMarkPending={alertInbox.markPending}
       />
 
       <IdukayIntegrationCard

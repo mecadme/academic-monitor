@@ -7,6 +7,14 @@ const dueDateFormatter = new Intl.DateTimeFormat(
   },
 );
 
+const acknowledgedAtFormatter = new Intl.DateTimeFormat(
+  'es-EC',
+  {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  },
+);
+
 export function formatAlertScore(
   value: number,
 ) {
@@ -25,4 +33,16 @@ export function formatAlertDueDate(
   }
 
   return dueDateFormatter.format(date);
+}
+
+export function formatAcknowledgedAt(
+  acknowledgedAt: string,
+) {
+  const date = new Date(acknowledgedAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return acknowledgedAt;
+  }
+
+  return acknowledgedAtFormatter.format(date);
 }

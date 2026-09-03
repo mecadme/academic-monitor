@@ -25,6 +25,11 @@ class AlertRepositoryAdapter implements AlertRepository {
     }
 
     @Override
+    public Optional<Alert> findById(UUID alertId) {
+        return repository.findById(alertId);
+    }
+
+    @Override
     public Optional<Alert> findByActivityIdAndStudentIdAndRuleCodeAndStatus(
             UUID activityId, UUID studentId, String ruleCode, AlertStatus status) {
 

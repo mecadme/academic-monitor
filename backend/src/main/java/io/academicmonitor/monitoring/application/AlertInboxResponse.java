@@ -2,6 +2,7 @@ package io.academicmonitor.monitoring.application;
 
 import io.academicmonitor.monitoring.domain.AlertSeverity;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -17,6 +18,7 @@ public record AlertInboxResponse(UUID institutionId, UUID teacherUserId, long to
             AlertSeverity severity,
             String ruleCode,
             BigDecimal score,
+            Instant acknowledgedAt,
             CourseSummary course,
             ActivitySummary activity,
             StudentSummary student) {}

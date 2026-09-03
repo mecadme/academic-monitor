@@ -19,6 +19,7 @@ import io.academicmonitor.monitoring.domain.AlertRepository;
 import io.academicmonitor.monitoring.domain.AlertSeverity;
 import io.academicmonitor.monitoring.domain.AlertStatus;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -379,6 +380,53 @@ class AlertInboxQueryServiceTest {
         verifyNoInteractions(alertRepository, activityRepository, studentRepository);
     }
 
+    @Test
+    void attentionStateFiltersComposeWithOwnedCourseAndAcademicPeriod() {
+        AcademicCourse courseA = course(COURSE_A_ID, "Course A", "Physics");
+        AcademicCourse courseB = course(COURSE_B_ID, "Course B", "Chemistry");
+        AcademicPeriod periodT1 = period(PERIOD_T1_ID);
+        Activity activity = activity(ACTIVITY_A_ID, COURSE_A_ID, PERIOD_T1_ID, "T1 Activity", "2026-01-15");
+        Student student = student(STUDENT_A_ID, INSTITUTION_ID, "Synthetic Student");
+        Alert pending = attentionAlert(ALERT_CRITICAL_LOW_ID, ACTIVITY_A_ID, AlertSeverity.CRITICAL, null);
+        Alert acknowledged = attentionAlert(
+                ALERT_WARNING_ID, ACTIVITY_A_ID, AlertSeverity.WARNING, Instant.parse("2026-09-02T12:00:00Z"));
+
+        when(courseRepository.findByInstitutionIdAndTeacherUserId(INSTITUTION_ID, TEACHER_USER_ID))
+                .thenReturn(List.of(courseA, courseB));
+        when(academicPeriodRepository.findByAcademicYearIdIn(Set.of(ACADEMIC_YEAR_ID)))
+                .thenReturn(List.of(periodT1));
+        when(alertRepository.findByInstitutionIdAndCourseIdInAndStatus(
+                        INSTITUTION_ID, Set.of(COURSE_A_ID), AlertStatus.OPEN))
+                .thenReturn(List.of(acknowledged, pending));
+        when(activityRepository.findActivitiesByCourseIdIn(Set.of(COURSE_A_ID))).thenReturn(List.of(activity));
+        when(studentRepository.findByInstitutionIdAndIdIn(INSTITUTION_ID, Set.of(STUDENT_A_ID)))
+                .thenReturn(List.of(student));
+
+        AlertInboxResponse pendingResult = service.getInbox(
+                INSTITUTION_ID, TEACHER_USER_ID, COURSE_A_ID, PERIOD_T1_ID, AlertAttentionState.PENDING);
+        AlertInboxResponse acknowledgedResult = service.getInbox(
+                INSTITUTION_ID, TEACHER_USER_ID, COURSE_A_ID, PERIOD_T1_ID, AlertAttentionState.ACKNOWLEDGED);
+        AlertInboxResponse allResult =
+                service.getInbox(INSTITUTION_ID, TEACHER_USER_ID, COURSE_A_ID, PERIOD_T1_ID, AlertAttentionState.ALL);
+        AlertInboxResponse omittedResult = service.getInbox(INSTITUTION_ID, TEACHER_USER_ID, COURSE_A_ID, PERIOD_T1_ID);
+
+        assertEquals(
+                List.of(ALERT_CRITICAL_LOW_ID),
+                pendingResult.alerts().stream()
+                        .map(AlertInboxResponse.AlertItem::id)
+                        .toList());
+        assertEquals(
+                List.of(ALERT_WARNING_ID),
+                acknowledgedResult.alerts().stream()
+                        .map(AlertInboxResponse.AlertItem::id)
+                        .toList());
+        assertEquals(2, allResult.total());
+        assertEquals(2, omittedResult.total());
+        assertEquals(
+                Instant.parse("2026-09-02T12:00:00Z"),
+                acknowledgedResult.alerts().getFirst().acknowledgedAt());
+    }
+
     private static AcademicCourse course(UUID id, String name, String subject) {
         AcademicCourse course = mock(AcademicCourse.class);
         when(course.getId()).thenReturn(id);
@@ -437,6 +485,22 @@ class AlertInboxQueryServiceTest {
         when(alert.getSeverity()).thenReturn(severity);
         when(alert.getScoreSnapshot()).thenReturn(new BigDecimal(score));
         when(alert.isOpen()).thenReturn(open);
+        return alert;
+    }
+
+    private static Alert attentionAlert(UUID id, UUID activityId, AlertSeverity severity, Instant acknowledgedAt) {
+        Alert alert = alert(
+                id,
+                INSTITUTION_ID,
+                COURSE_A_ID,
+                activityId,
+                STUDENT_A_ID,
+                severity,
+                severity == AlertSeverity.CRITICAL ? "4.50" : "6.50",
+                true);
+        when(alert.getAcknowledgedAt()).thenReturn(acknowledgedAt);
+        when(alert.isPending()).thenReturn(acknowledgedAt == null);
+        when(alert.isAcknowledged()).thenReturn(acknowledgedAt != null);
         return alert;
     }
 }
