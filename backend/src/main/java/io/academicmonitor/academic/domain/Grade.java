@@ -54,6 +54,11 @@ public class Grade {
         this.score = score;
     }
 
+    public void update(BigDecimal score, Instant sourceUpdatedAt) {
+        changeScore(score);
+        this.sourceUpdatedAt = sourceUpdatedAt;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -68,5 +73,9 @@ public class Grade {
 
     public BigDecimal getScore() {
         return score;
+    }
+
+    public Instant getSourceUpdatedAt() {
+        return sourceUpdatedAt;
     }
 }

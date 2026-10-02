@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -193,6 +194,34 @@ class IdukayCourseActivitiesClientTest {
     }
 
     @Test
+    void inheritsTheCentralGetRetryPolicy() throws Exception {
+
+        AtomicInteger requests = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/api/teacher_courses", exchange -> {
+            if (requests.incrementAndGet() == 1) {
+                sendJson(exchange, 503, "{}");
+            } else {
+                sendJson(
+                        exchange,
+                        "{\"errors\": [], \"response\": [{\"_id\": \"course-test-001\", \"activities\": []}]}");
+            }
+        });
+        server.start();
+        IdukayAuthenticatedSession session = IdukayAuthenticatedSession.create(
+                "synthetic-token",
+                new IdukaySessionContext(
+                        "year-test-001", "school-test-001", null, null, "profile-test-001", "staff", "-05:00", null),
+                RestClient.builder().baseUrl(baseUrl()).build());
+        IdukayCourseActivitiesClient client = new IdukayCourseActivitiesClient(new IdukayApiClient("12.0.2"));
+
+        List<IdukayActivityDto> activities = client.findActivities(session, "course-test-001");
+
+        assertTrue(activities.isEmpty());
+        assertEquals(2, requests.get());
+    }
+
+    @Test
     void mapperAllowsScoreWithoutTimestamp() {
 
         IdukayActivityDto activity = new IdukayActivityDto(
@@ -269,11 +298,16 @@ class IdukayCourseActivitiesClientTest {
 
     private static void sendJson(HttpExchange exchange, String json) throws IOException {
 
+        sendJson(exchange, 200, json);
+    }
+
+    private static void sendJson(HttpExchange exchange, int status, String json) throws IOException {
+
         byte[] response = json.getBytes(StandardCharsets.UTF_8);
 
         exchange.getResponseHeaders().add("Content-Type", "application/json");
 
-        exchange.sendResponseHeaders(200, response.length);
+        exchange.sendResponseHeaders(status, response.length);
 
         exchange.getResponseBody().write(response);
 

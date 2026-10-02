@@ -12,13 +12,18 @@ import io.academicmonitor.academic.domain.Student;
 import io.academicmonitor.academic.domain.StudentRepository;
 import io.academicmonitor.monitoring.application.AlertEvaluationService;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ActivityGradeSynchronizer {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ActivityGradeSynchronizer.class);
 
     private final StudentRepository studentRepository;
     private final ActivityRepository activityRepository;
@@ -47,6 +52,7 @@ public class ActivityGradeSynchronizer {
         int gradesProcessed = 0;
 
         List<UUID> activityIds = new ArrayList<>();
+        Map<GradeIdentity, ResolvedGrade> gradesByIdentity = new LinkedHashMap<>();
 
         for (PlatformActivitySnapshot platformActivity : platformCourse.activities()) {
 
@@ -57,11 +63,29 @@ public class ActivityGradeSynchronizer {
             activityIds.add(activity.getId());
 
             for (PlatformGradeSnapshot platformGrade : platformActivity.grades()) {
+                Student student = resolveStudent(institutionId, platformCode, platformGrade);
+                GradeIdentity identity = new GradeIdentity(activity.getId(), student.getId());
+                ResolvedGrade candidate = new ResolvedGrade(activity, student, platformGrade);
+                ResolvedGrade existing = gradesByIdentity.putIfAbsent(identity, candidate);
 
-                synchronizeGrade(institutionId, platformCode, course, activity, platformGrade);
+                if (existing == null) {
+                    continue;
+                }
 
-                gradesProcessed++;
+                LOGGER.warn(
+                        "Platform snapshot contains duplicate grade for activity {} and student {}; consolidating it by natural key",
+                        activity.getId(),
+                        student.getId());
+
+                if (isMoreRecent(candidate.platformGrade(), existing.platformGrade())) {
+                    gradesByIdentity.put(identity, candidate);
+                }
             }
+        }
+
+        for (ResolvedGrade grade : gradesByIdentity.values()) {
+            synchronizeGrade(institutionId, course, grade);
+            gradesProcessed++;
         }
 
         return new Result(gradesProcessed, activityIds);
@@ -110,31 +134,43 @@ public class ActivityGradeSynchronizer {
         return academicPeriodId;
     }
 
-    private void synchronizeGrade(
-            UUID institutionId,
-            String platformCode,
-            AcademicCourse course,
-            Activity activity,
-            PlatformGradeSnapshot platformGrade) {
+    private void synchronizeGrade(UUID institutionId, AcademicCourse course, ResolvedGrade resolvedGrade) {
 
-        Student student = studentRepository
-                .findStudentByInstitutionIdAndPlatformCodeAndExternalId(
-                        institutionId, platformCode, platformGrade.studentExternalId())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Grade references unknown student: " + platformGrade.studentExternalId()));
+        Activity activity = resolvedGrade.activity();
+        Student student = resolvedGrade.student();
+        PlatformGradeSnapshot platformGrade = resolvedGrade.platformGrade();
 
         Grade grade = gradeRepository
                 .findByActivityIdAndStudentId(activity.getId(), student.getId())
                 .orElseGet(() -> new Grade(
                         activity.getId(), student.getId(), platformGrade.score(), platformGrade.recordedAt()));
 
-        grade.changeScore(platformGrade.score());
+        grade.update(platformGrade.score(), platformGrade.recordedAt());
 
         gradeRepository.save(grade);
 
         alertEvaluationService.evaluate(
                 institutionId, course.getId(), activity.getId(), student.getId(), platformGrade.score());
     }
+
+    private Student resolveStudent(UUID institutionId, String platformCode, PlatformGradeSnapshot platformGrade) {
+        return studentRepository
+                .findStudentByInstitutionIdAndPlatformCodeAndExternalId(
+                        institutionId, platformCode, platformGrade.studentExternalId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Grade references unknown student: " + platformGrade.studentExternalId()));
+    }
+
+    private static boolean isMoreRecent(PlatformGradeSnapshot candidate, PlatformGradeSnapshot current) {
+        if (candidate.recordedAt() == null) {
+            return false;
+        }
+        return current.recordedAt() == null || candidate.recordedAt().isAfter(current.recordedAt());
+    }
+
+    private record GradeIdentity(UUID activityId, UUID studentId) {}
+
+    private record ResolvedGrade(Activity activity, Student student, PlatformGradeSnapshot platformGrade) {}
 
     record Result(int gradesProcessed, List<UUID> activityIds) {
 

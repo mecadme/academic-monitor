@@ -5,10 +5,13 @@ import io.academicmonitor.academic.application.port.AcademicPlatformFilter;
 import io.academicmonitor.academic.application.port.AcademicPlatformPort;
 import io.academicmonitor.academic.application.port.AcademicPlatformSnapshot;
 import io.academicmonitor.academic.application.port.PlatformCourseSnapshot;
+import io.academicmonitor.academic.application.port.PlatformGuardianSyncSnapshot;
 import io.academicmonitor.academic.domain.AcademicCourse;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,16 +22,33 @@ public class AcademicSyncService {
     private final CourseRosterSynchronizer courseRosterSynchronizer;
     private final ActivityGradeSynchronizer activityGradeSynchronizer;
     private final SyncAlertSummaryService alertSummaryService;
+    private final GuardianSynchronizer guardianSynchronizer;
 
+    @Autowired
     public AcademicSyncService(
             AcademicCalendarSynchronizer academicCalendarSynchronizer,
             CourseRosterSynchronizer courseRosterSynchronizer,
             ActivityGradeSynchronizer activityGradeSynchronizer,
-            SyncAlertSummaryService alertSummaryService) {
+            SyncAlertSummaryService alertSummaryService,
+            GuardianSynchronizer guardianSynchronizer) {
         this.academicCalendarSynchronizer = academicCalendarSynchronizer;
         this.courseRosterSynchronizer = courseRosterSynchronizer;
         this.activityGradeSynchronizer = activityGradeSynchronizer;
         this.alertSummaryService = alertSummaryService;
+        this.guardianSynchronizer = guardianSynchronizer;
+    }
+
+    AcademicSyncService(
+            AcademicCalendarSynchronizer academicCalendarSynchronizer,
+            CourseRosterSynchronizer courseRosterSynchronizer,
+            ActivityGradeSynchronizer activityGradeSynchronizer,
+            SyncAlertSummaryService alertSummaryService) {
+        this(
+                academicCalendarSynchronizer,
+                courseRosterSynchronizer,
+                activityGradeSynchronizer,
+                alertSummaryService,
+                null);
     }
 
     @Transactional
@@ -52,7 +72,29 @@ public class AcademicSyncService {
 
         PlatformCourseSnapshot platformCourse = resolveSingleCourse(snapshot);
 
-        return synchronizePlatformCourse(institutionId, teacherUserId, platformCode, platformCourse, effectiveFilter);
+        AcademicSyncResult result =
+                synchronizePlatformCourse(institutionId, teacherUserId, platformCode, platformCourse, effectiveFilter);
+        GuardianSynchronizer.Result guardianResult = synchronizeGuardians(
+                institutionId,
+                teacherUserId,
+                platformCode,
+                platform,
+                snapshot.courses().stream()
+                        .flatMap(course -> course.students().stream())
+                        .map(student -> student.externalId())
+                        .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new)));
+        return new AcademicSyncResult(
+                result.courseId(),
+                result.courseName(),
+                result.students(),
+                result.gradesProcessed(),
+                result.openAlerts(),
+                result.warnings(),
+                result.critical(),
+                result.academicPeriodId(),
+                guardianResult.guardiansUpserted(),
+                guardianResult.guardianRelationshipsUpserted(),
+                guardianResult.guardianWarnings());
     }
 
     @Transactional
@@ -86,7 +128,28 @@ public class AcademicSyncService {
             results.add(result);
         }
 
-        AcademicBatchSyncResult result = new AcademicBatchSyncResult(results);
+        GuardianSynchronizer.Result guardianResult = synchronizeGuardians(
+                institutionId,
+                teacherUserId,
+                platformCode,
+                platform,
+                snapshot.courses().stream()
+                        .flatMap(course -> course.students().stream())
+                        .map(student -> student.externalId())
+                        .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new)));
+        AcademicBatchSyncResult result = new AcademicBatchSyncResult(
+                results,
+                guardianResult.guardiansUpserted(),
+                guardianResult.guardianRelationshipsUpserted(),
+                guardianResult.guardianWarnings(),
+                guardianResult.studentsInspected(),
+                guardianResult.guardianStudentFetches(),
+                guardianResult.guardianStudentWarnings(),
+                guardianResult.guardianStudentFetchDurationMs(),
+                guardianResult.uniqueParentIds(),
+                guardianResult.guardianCacheHits(),
+                guardianResult.guardianFetches(),
+                guardianResult.guardianSyncDurationMs());
         result.academicPeriodId();
         return result;
     }
@@ -120,7 +183,37 @@ public class AcademicSyncService {
                 alertSummary.openAlerts(),
                 alertSummary.warnings(),
                 alertSummary.critical(),
-                academicPeriodId);
+                academicPeriodId,
+                0,
+                0,
+                0);
+    }
+
+    private GuardianSynchronizer.Result synchronizeGuardians(
+            UUID institutionId,
+            UUID teacherUserId,
+            String platformCode,
+            AcademicPlatformPort platform,
+            LinkedHashSet<String> studentExternalIds) {
+        if (guardianSynchronizer == null || studentExternalIds.isEmpty())
+            return new GuardianSynchronizer.Result(0, 0, 0);
+        long startedAt = System.nanoTime();
+        AcademicPlatformContext context = new AcademicPlatformContext(institutionId, teacherUserId);
+        PlatformGuardianSyncSnapshot guardianSnapshot = platform.fetchGuardians(context, studentExternalIds);
+        GuardianSynchronizer.Result result =
+                guardianSynchronizer.synchronize(institutionId, platformCode, studentExternalIds, guardianSnapshot);
+        return new GuardianSynchronizer.Result(
+                result.guardiansUpserted(),
+                result.guardianRelationshipsUpserted(),
+                result.guardianWarnings(),
+                result.studentsInspected(),
+                result.guardianStudentFetches(),
+                result.guardianStudentWarnings(),
+                result.guardianStudentFetchDurationMs(),
+                result.uniqueParentIds(),
+                result.guardianCacheHits(),
+                result.guardianFetches(),
+                java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
     }
 
     private AcademicPlatformSnapshot fetchSnapshot(

@@ -29,6 +29,8 @@ app:
   idukay:
     base-url: ${IDUKAY_BASE_URL:https://idukay.net/colegios/api/}
     client-version: ${IDUKAY_CLIENT_VERSION:12.0.2}
+    guardian-fetch-concurrency: ${IDUKAY_GUARDIAN_FETCH_CONCURRENCY:6}
+    guardian-student-fetch-concurrency: ${IDUKAY_GUARDIAN_STUDENT_FETCH_CONCURRENCY:8}
     test-login-enabled: ${IDUKAY_TEST_LOGIN_ENABLED:true}
 
 management:
