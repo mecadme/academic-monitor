@@ -34,7 +34,18 @@ class IdukayTestSnapshotControllerTest {
                 mock(IdukayCoursePeriodClient.class));
         AcademicPlatformFilter filter = new AcademicPlatformFilter("external-period-t2");
         AcademicBatchSyncResult syncResult = new AcademicBatchSyncResult(
-                List.of(new AcademicSyncResult(courseId, "Course", 20, 100, 12, 8, 4, internalPeriodId)));
+                List.of(new AcademicSyncResult(courseId, "Course", 20, 100, 12, 8, 4, internalPeriodId)),
+                2,
+                3,
+                4,
+                20,
+                20,
+                1,
+                1500,
+                25,
+                21,
+                4,
+                1900);
         when(syncService.synchronizeAll(institutionId, teacherId, "IDUKAY", adapter, filter))
                 .thenReturn(syncResult);
 
@@ -45,5 +56,14 @@ class IdukayTestSnapshotControllerTest {
         assertEquals(1, response.coursesProcessed());
         assertEquals(100, response.gradesProcessed());
         assertEquals(12, response.openAlerts());
+        assertEquals(2, response.guardiansUpserted());
+        assertEquals(3, response.guardianRelationshipsUpserted());
+        assertEquals(20, response.guardianStudentFetches());
+        assertEquals(1, response.guardianStudentWarnings());
+        assertEquals(1500, response.guardianStudentFetchDurationMs());
+        assertEquals(4, response.guardianFetches());
+        assertEquals(21, response.guardianCacheHits());
+        assertEquals(4, response.guardianWarnings());
+        assertEquals(1900, response.guardianSyncDurationMs());
     }
 }

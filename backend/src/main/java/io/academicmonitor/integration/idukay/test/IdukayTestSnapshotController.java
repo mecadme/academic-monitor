@@ -134,7 +134,16 @@ public class IdukayTestSnapshotController {
                 result.gradesProcessed(),
                 result.openAlerts(),
                 result.warnings(),
-                result.critical());
+                result.critical(),
+                result.guardiansUpserted(),
+                result.guardianRelationshipsUpserted(),
+                result.guardianStudentFetches(),
+                result.guardianStudentWarnings(),
+                result.guardianStudentFetchDurationMs(),
+                result.guardianFetches(),
+                result.guardianCacheHits(),
+                result.guardianWarnings(),
+                result.guardianSyncDurationMs());
     }
 
     public record TestPeriodsResponse(
@@ -155,5 +164,14 @@ public class IdukayTestSnapshotController {
             int gradesProcessed,
             int openAlerts,
             long warnings,
-            long critical) {}
+            long critical,
+            int guardiansUpserted,
+            int guardianRelationshipsUpserted,
+            int guardianStudentFetches,
+            int guardianStudentWarnings,
+            long guardianStudentFetchDurationMs,
+            int guardianFetches,
+            int guardianCacheHits,
+            int guardianWarnings,
+            long guardianSyncDurationMs) {}
 }

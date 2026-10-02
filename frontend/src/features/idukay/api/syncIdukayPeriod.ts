@@ -11,6 +11,12 @@ export type SyncIdukayPeriodResponse = {
   openAlerts: number
   warnings: number
   critical: number
+  guardiansUpserted: number
+  guardianRelationshipsUpserted: number
+  guardianFetches: number
+  guardianCacheHits: number
+  guardianWarnings: number
+  guardianSyncDurationMs: number
 }
 
 export async function syncIdukayPeriod(

@@ -211,7 +211,8 @@ class IdukayTeacherCoursesClientTest {
                 null,
                 List.of(new IdukayStudentDto(
                         "student-test-001",
-                        new IdukayStudentRelationalDataDto(new IdukayStudentNameDto("ANA MARIA PEREZ", null)))));
+                        new IdukayStudentRelationalDataDto(new IdukayStudentNameDto("ANA MARIA PEREZ", null)),
+                        List.of())));
 
         PlatformCourseSnapshot snapshot = IdukayCourseMapper.toSnapshot(course);
 

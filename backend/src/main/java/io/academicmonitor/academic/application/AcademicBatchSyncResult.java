@@ -4,10 +4,51 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-public record AcademicBatchSyncResult(List<AcademicSyncResult> courses) {
+public record AcademicBatchSyncResult(
+        List<AcademicSyncResult> courses,
+        int guardiansUpserted,
+        int guardianRelationshipsUpserted,
+        int guardianWarnings,
+        int studentsInspected,
+        int guardianStudentFetches,
+        int guardianStudentWarnings,
+        long guardianStudentFetchDurationMs,
+        int uniqueParentIds,
+        int guardianCacheHits,
+        int guardianFetches,
+        long guardianSyncDurationMs) {
 
     public AcademicBatchSyncResult {
         courses = courses == null ? List.of() : List.copyOf(courses);
+    }
+
+    public AcademicBatchSyncResult(List<AcademicSyncResult> courses) {
+        this(courses, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    public AcademicBatchSyncResult(
+            List<AcademicSyncResult> courses,
+            int guardiansUpserted,
+            int guardianRelationshipsUpserted,
+            int guardianWarnings,
+            int studentsInspected,
+            int uniqueParentIds,
+            int guardianCacheHits,
+            int guardianFetches,
+            long guardianSyncDurationMs) {
+        this(
+                courses,
+                guardiansUpserted,
+                guardianRelationshipsUpserted,
+                guardianWarnings,
+                studentsInspected,
+                0,
+                0,
+                0,
+                uniqueParentIds,
+                guardianCacheHits,
+                guardianFetches,
+                guardianSyncDurationMs);
     }
 
     public int coursesProcessed() {
