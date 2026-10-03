@@ -2,6 +2,7 @@ package io.academicmonitor.communication.application;
 
 import io.academicmonitor.communication.domain.Communication;
 import io.academicmonitor.communication.domain.CommunicationRepository;
+import io.academicmonitor.notification.application.AppNotificationService;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -12,9 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class CommunicationAuditService {
 
     private final CommunicationRepository repository;
+    private final AppNotificationService notificationService;
 
-    public CommunicationAuditService(CommunicationRepository repository) {
+    public CommunicationAuditService(CommunicationRepository repository, AppNotificationService notificationService) {
         this.repository = repository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -42,6 +45,8 @@ public class CommunicationAuditService {
         Communication communication = getCommunication(communicationId);
         communication.markSent(Instant.now());
         repository.save(communication);
+        notificationService.communicationSent(
+                communication.getInstitutionId(), communication.getTeacherUserId(), communication.getId());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -49,6 +54,8 @@ public class CommunicationAuditService {
         Communication communication = getCommunication(communicationId);
         communication.markFailed(failureCode, failureReason);
         repository.save(communication);
+        notificationService.communicationFailed(
+                communication.getInstitutionId(), communication.getTeacherUserId(), communication.getId());
     }
 
     private Communication getCommunication(UUID communicationId) {

@@ -149,8 +149,21 @@ public class ActivityGradeSynchronizer {
 
         gradeRepository.save(grade);
 
+        if (course.getTeacherUserId() == null) {
+            alertEvaluationService.evaluate(
+                    institutionId, course.getId(), activity.getId(), student.getId(), platformGrade.score());
+            return;
+        }
         alertEvaluationService.evaluate(
-                institutionId, course.getId(), activity.getId(), student.getId(), platformGrade.score());
+                institutionId,
+                course.getTeacherUserId(),
+                course.getId(),
+                activity.getId(),
+                student.getId(),
+                platformGrade.score(),
+                activity.getAcademicPeriodId(),
+                student.getFullName(),
+                course.getSubject() == null ? course.getName() : course.getSubject());
     }
 
     private Student resolveStudent(UUID institutionId, String platformCode, PlatformGradeSnapshot platformGrade) {

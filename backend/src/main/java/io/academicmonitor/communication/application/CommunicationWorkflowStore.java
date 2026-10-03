@@ -3,6 +3,7 @@ package io.academicmonitor.communication.application;
 import io.academicmonitor.communication.domain.Communication;
 import io.academicmonitor.communication.domain.CommunicationRepository;
 import io.academicmonitor.communication.domain.CommunicationStatus;
+import io.academicmonitor.notification.application.AppNotificationService;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -12,9 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class CommunicationWorkflowStore {
     private final CommunicationRepository repository;
+    private final AppNotificationService notificationService;
 
-    CommunicationWorkflowStore(CommunicationRepository repository) {
+    CommunicationWorkflowStore(CommunicationRepository repository, AppNotificationService notificationService) {
         this.repository = repository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -32,6 +35,8 @@ class CommunicationWorkflowStore {
         Communication communication = get(communicationId);
         communication.markSent(Instant.now());
         repository.save(communication);
+        notificationService.communicationSent(
+                communication.getInstitutionId(), communication.getTeacherUserId(), communication.getId());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -39,6 +44,8 @@ class CommunicationWorkflowStore {
         Communication communication = get(communicationId);
         communication.markFailed(code, "Provider delivery failed");
         repository.save(communication);
+        notificationService.communicationFailed(
+                communication.getInstitutionId(), communication.getTeacherUserId(), communication.getId());
     }
 
     private Communication get(UUID communicationId) {

@@ -18,12 +18,14 @@ type UseIdukayIntegrationInput = {
   onSyncSuccess?: (
     result: SyncIdukayPeriodResponse,
   ) => void | Promise<void>;
+  onSyncFinished?: () => void | Promise<void>;
 };
 
 export function useIdukayIntegration({
                                        institutionId,
                                        teacherUserId,
                                        onSyncSuccess,
+                                       onSyncFinished,
                                      }: UseIdukayIntegrationInput) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -156,6 +158,7 @@ export function useIdukayIntegration({
       setError('No se pudo completar la sincronización.');
     } finally {
       setSyncing(false);
+      await onSyncFinished?.();
     }
   }
 
