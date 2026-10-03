@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 
 import { useAcademicPeriod } from '../../features/context/AcademicPeriodProvider';
 
-type Props = { path: string; onNavigate: (path: string) => void; connected?: boolean; children: ReactNode };
+type Props = { path: string; onNavigate: (path: string) => void; connected?: boolean; notificationCenter?: ReactNode; children: ReactNode };
 
 const navigation = [
   { path: '/', label: 'Inicio', icon: Home },
@@ -13,7 +13,7 @@ const navigation = [
   { path: '/settings', label: 'Configuración', icon: Settings },
 ];
 
-export function AppShell({ path, onNavigate, connected = false, children }: Props) {
+export function AppShell({ path, onNavigate, connected = false, notificationCenter, children }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { academicYears, periods, selectedAcademicYearId, selectedPeriodId, selectAcademicYear, selectPeriod, loading } = useAcademicPeriod();
   const isActive = (itemPath: string) => itemPath === '/' ? path === '/' : path.startsWith(itemPath);
@@ -34,18 +34,14 @@ export function AppShell({ path, onNavigate, connected = false, children }: Prop
         <div className="period-controls">
           <div className="academic-context-control">
             <label htmlFor="global-academic-year">Año lectivo</label>
-            {academicYears.length > 1 ? <select id="global-academic-year" value={selectedAcademicYearId ?? ''} disabled={loading || academicYears.length === 0} onChange={(event) => selectAcademicYear(event.target.value)}>
-              {academicYears.map((year) => <option key={year.id} value={year.id}>{year.name}</option>)}
-            </select> : <span className="academic-year">{academicYears[0]?.name ?? 'Año lectivo'}</span>}
+            {academicYears.length > 1 ? <select id="global-academic-year" value={selectedAcademicYearId ?? ''} disabled={loading || academicYears.length === 0} onChange={(event) => selectAcademicYear(event.target.value)}>{academicYears.map((year) => <option key={year.id} value={year.id}>{year.name}</option>)}</select> : <span className="academic-year">{academicYears[0]?.name ?? 'Año lectivo'}</span>}
           </div>
           <div className="academic-context-control">
-          <label htmlFor="global-period">Período</label>
-          <select id="global-period" value={selectedPeriodId ?? ''} disabled={loading || periods.length === 0} onChange={(event) => selectPeriod(event.target.value)}>
-            {periods.map((period) => <option key={period.id} value={period.id}>{period.abbreviation ? `${period.abbreviation} · ` : ''}{period.name}</option>)}
-          </select>
+            <label htmlFor="global-period">Período</label>
+            <select id="global-period" value={selectedPeriodId ?? ''} disabled={loading || periods.length === 0} onChange={(event) => selectPeriod(event.target.value)}>{periods.map((period) => <option key={period.id} value={period.id}>{period.abbreviation ? `${period.abbreviation} · ` : ''}{period.name}</option>)}</select>
           </div>
         </div>
-        <div className="topbar-actions"><button className="notification-button" type="button" aria-label="Notificaciones" title="Centro de notificaciones próximamente"><Bell size={19} /></button><button className="connection-link" type="button" onClick={() => navigate('/settings/integrations')}><span className={`connection-dot ${connected ? 'is-connected' : ''}`} />{connected ? 'Conectado' : 'Conectar'}</button></div>
+        <div className="topbar-actions">{notificationCenter ?? <button className="notification-button" type="button" aria-label="Notificaciones"><Bell size={19} /></button>}<button className="connection-link" type="button" onClick={() => navigate('/settings/integrations')}><span className={`connection-dot ${connected ? 'is-connected' : ''}`} />{connected ? 'Conectado' : 'Conectar'}</button></div>
       </header>
       <main className="route-content">{children}</main>
     </div>

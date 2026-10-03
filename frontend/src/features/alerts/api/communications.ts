@@ -80,11 +80,15 @@ export async function sendCommunication(
   communicationId: string,
   scope: Scope,
 ): Promise<Communication> {
-  return request(
+  try {
+    return await request(
     `/api/v1/communications/${encodeURIComponent(communicationId)}/send`,
     scope,
     { method: 'POST' },
-  );
+    );
+  } finally {
+    window.dispatchEvent(new Event('academic-monitor:notifications-refresh'));
+  }
 }
 
 async function request(

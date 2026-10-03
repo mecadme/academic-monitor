@@ -16,6 +16,7 @@ import { DataStatusCard } from './features/dashboard/components/DataStatusCard';
 import { IdukayIntegrationCard } from './features/dashboard/components/IdukayIntegrationCard';
 import { useAcademicDashboard } from './features/dashboard/hooks/useAcademicDashboard';
 import { useIdukayIntegration } from './features/idukay/hooks/useIdukayIntegration';
+import { NotificationCenter, NotificationsPage } from './features/notifications/components/NotificationCenter';
 
 type Scope = { institutionId: string; teacherUserId: string; courses: AcademicDashboardCourse[]; periods: AcademicPeriod[]; selectedPeriod: AcademicPeriod | null; selectedPeriodId: string | null; selectedPeriodName: string | null; };
 type DashboardPageProps = Scope & { dashboard: AcademicDashboard | null; loading: boolean; error: string | null; onRetry: () => Promise<void>; onNavigate: (path: string) => void; idukay: ReturnType<typeof useIdukayIntegration>; };
@@ -31,7 +32,8 @@ function AcademicMonitor({ institutionId, teacherUserId }: Pick<Scope, 'institut
   const period = useAcademicPeriod();
   const [location, navigate] = useLocation();
   const dashboard = useAcademicDashboard({ institutionId, teacherUserId, academicPeriodId: period.selectedPeriodId });
-  const idukay = useIdukayIntegration({ institutionId, teacherUserId, onSyncSuccess: async () => { await period.refresh(); await dashboard.refresh(); } });
+  const notificationScope = { institutionId, teacherUserId };
+  const idukay = useIdukayIntegration({ institutionId, teacherUserId, onSyncSuccess: async () => { await period.refresh(); await dashboard.refresh(); }, onSyncFinished: async () => { window.dispatchEvent(new Event('academic-monitor:notifications-refresh')); } });
   const scope: Scope = { institutionId, teacherUserId, courses: dashboard.dashboard?.courses ?? [], periods: period.periods, selectedPeriod: period.selectedPeriod, selectedPeriodId: period.selectedPeriodId, selectedPeriodName: period.selectedPeriod?.name ?? null };
   let content: ReactNode;
   if (period.loading) content = <PageSkeleton />;
@@ -41,11 +43,12 @@ function AcademicMonitor({ institutionId, teacherUserId }: Pick<Scope, 'institut
   else if (location.path === '/courses') content = <CoursesPage {...scope} dashboard={dashboard.dashboard} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.refresh} onNavigate={navigate} idukay={idukay} />;
   else if (location.path.startsWith('/courses/')) content = <CourseDetailPage {...scope} dashboard={dashboard.dashboard} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.refresh} onNavigate={navigate} idukay={idukay} path={location.path} search={location.search} />;
   else if (location.path === '/alerts') content = <AlertsPage {...scope} onNavigate={navigate} />;
+  else if (location.path === '/notifications') content = <NotificationsPage scope={notificationScope} onNavigate={navigate} />;
   else if (location.path.startsWith('/communications/')) content = <CommunicationDetailPage institutionId={institutionId} teacherUserId={teacherUserId} communicationId={decodeURIComponent(location.path.slice('/communications/'.length))} onNavigate={navigate} />;
   else if (location.path === '/communications') content = <CommunicationsPage institutionId={institutionId} teacherUserId={teacherUserId} onNavigate={navigate} />;
   else if (location.path === '/settings' || location.path === '/settings/integrations') content = <SettingsPage idukay={idukay} />;
   else content = <EmptyState title="Página no encontrada" message="La dirección no corresponde a una vista de Academic Monitor." actionLabel="Volver al inicio" onAction={() => navigate('/')} />;
-  return <AppShell path={location.path} onNavigate={navigate} connected={idukay.connected}>{content}</AppShell>;
+  return <AppShell path={location.path} onNavigate={navigate} connected={idukay.connected} notificationCenter={<NotificationCenter scope={notificationScope} onNavigate={navigate} />}>{content}</AppShell>;
 }
 
 function DashboardPage({ dashboard, loading, error, onRetry, onNavigate, selectedPeriodName, selectedPeriod, idukay }: DashboardPageProps) {

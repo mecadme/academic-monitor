@@ -12,8 +12,10 @@ import io.academicmonitor.integration.idukay.course.IdukayTeacherCourseDto;
 import io.academicmonitor.integration.idukay.course.IdukayTeacherCoursesClient;
 import io.academicmonitor.integration.idukay.period.IdukayCoursePeriodClient;
 import io.academicmonitor.integration.idukay.period.IdukayCustomYearDto;
+import io.academicmonitor.notification.application.AppNotificationService;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,19 +35,32 @@ public class IdukayTestSnapshotController {
     private final IdukaySessionProvider sessionProvider;
     private final IdukayTeacherCoursesClient teacherCoursesClient;
     private final IdukayCoursePeriodClient coursePeriodClient;
+    private final AppNotificationService notificationService;
 
-    public IdukayTestSnapshotController(
+    IdukayTestSnapshotController(
             IdukayAcademicPlatformAdapter adapter,
             AcademicSyncService syncService,
             IdukaySessionProvider sessionProvider,
             IdukayTeacherCoursesClient teacherCoursesClient,
             IdukayCoursePeriodClient coursePeriodClient) {
+        this(adapter, syncService, sessionProvider, teacherCoursesClient, coursePeriodClient, null);
+    }
+
+    @Autowired
+    public IdukayTestSnapshotController(
+            IdukayAcademicPlatformAdapter adapter,
+            AcademicSyncService syncService,
+            IdukaySessionProvider sessionProvider,
+            IdukayTeacherCoursesClient teacherCoursesClient,
+            IdukayCoursePeriodClient coursePeriodClient,
+            AppNotificationService notificationService) {
 
         this.adapter = adapter;
         this.syncService = syncService;
         this.sessionProvider = sessionProvider;
         this.teacherCoursesClient = teacherCoursesClient;
         this.coursePeriodClient = coursePeriodClient;
+        this.notificationService = notificationService;
     }
 
     @GetMapping("/test-periods")
@@ -125,25 +140,38 @@ public class IdukayTestSnapshotController {
 
         AcademicPlatformFilter filter = new AcademicPlatformFilter(periodExternalId);
 
-        AcademicBatchSyncResult result =
-                syncService.synchronizeAll(institutionId, teacherUserId, PLATFORM_CODE, adapter, filter);
+        try {
+            AcademicBatchSyncResult result =
+                    syncService.synchronizeAll(institutionId, teacherUserId, PLATFORM_CODE, adapter, filter);
+            if (notificationService != null) {
+                notificationService.syncCompleted(
+                        institutionId,
+                        teacherUserId,
+                        result.academicPeriodId(),
+                        result.coursesProcessed(),
+                        result.gradesProcessed());
+            }
 
-        return new TestBatchSyncResponse(
-                result.academicPeriodId(),
-                result.coursesProcessed(),
-                result.gradesProcessed(),
-                result.openAlerts(),
-                result.warnings(),
-                result.critical(),
-                result.guardiansUpserted(),
-                result.guardianRelationshipsUpserted(),
-                result.guardianStudentFetches(),
-                result.guardianStudentWarnings(),
-                result.guardianStudentFetchDurationMs(),
-                result.guardianFetches(),
-                result.guardianCacheHits(),
-                result.guardianWarnings(),
-                result.guardianSyncDurationMs());
+            return new TestBatchSyncResponse(
+                    result.academicPeriodId(),
+                    result.coursesProcessed(),
+                    result.gradesProcessed(),
+                    result.openAlerts(),
+                    result.warnings(),
+                    result.critical(),
+                    result.guardiansUpserted(),
+                    result.guardianRelationshipsUpserted(),
+                    result.guardianStudentFetches(),
+                    result.guardianStudentWarnings(),
+                    result.guardianStudentFetchDurationMs(),
+                    result.guardianFetches(),
+                    result.guardianCacheHits(),
+                    result.guardianWarnings(),
+                    result.guardianSyncDurationMs());
+        } catch (RuntimeException exception) {
+            if (notificationService != null) notificationService.syncFailed(institutionId, teacherUserId, null);
+            throw exception;
+        }
     }
 
     public record TestPeriodsResponse(

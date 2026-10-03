@@ -4,9 +4,11 @@ import io.academicmonitor.monitoring.domain.Alert;
 import io.academicmonitor.monitoring.domain.AlertRepository;
 import io.academicmonitor.monitoring.domain.AlertSeverity;
 import io.academicmonitor.monitoring.domain.AlertStatus;
+import io.academicmonitor.notification.application.AppNotificationService;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -19,12 +21,32 @@ public class AlertEvaluationService {
     private static final BigDecimal WARNING_LIMIT = new BigDecimal("7.00");
 
     private final AlertRepository alertRepository;
+    private final AppNotificationService notificationService;
 
     public AlertEvaluationService(AlertRepository alertRepository) {
+        this(alertRepository, null);
+    }
+
+    @Autowired
+    public AlertEvaluationService(AlertRepository alertRepository, AppNotificationService notificationService) {
         this.alertRepository = alertRepository;
+        this.notificationService = notificationService;
     }
 
     public void evaluate(UUID institutionId, UUID courseId, UUID activityId, UUID studentId, BigDecimal score) {
+        evaluate(institutionId, null, courseId, activityId, studentId, score, null, null, null);
+    }
+
+    public void evaluate(
+            UUID institutionId,
+            UUID teacherUserId,
+            UUID courseId,
+            UUID activityId,
+            UUID studentId,
+            BigDecimal score,
+            UUID academicPeriodId,
+            String studentName,
+            String subject) {
 
         Optional<Alert> existing = alertRepository.findByActivityIdAndStudentIdAndRuleCodeAndStatus(
                 activityId, studentId, LOW_GRADE_RULE, AlertStatus.OPEN);
@@ -51,6 +73,10 @@ public class AlertEvaluationService {
 
         Alert alert = new Alert(institutionId, courseId, activityId, studentId, LOW_GRADE_RULE, severity, score);
 
-        alertRepository.save(alert);
+        Alert saved = alertRepository.save(alert);
+        if (severity == AlertSeverity.CRITICAL && notificationService != null && teacherUserId != null) {
+            notificationService.newCriticalAlert(
+                    institutionId, teacherUserId, saved.getId(), academicPeriodId, studentName, subject);
+        }
     }
 }
