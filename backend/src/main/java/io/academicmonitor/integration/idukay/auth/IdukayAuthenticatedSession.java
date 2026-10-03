@@ -6,12 +6,18 @@ import org.springframework.web.client.RestClient;
 public final class IdukayAuthenticatedSession {
 
     private final String authorizationToken;
+    private final String authenticatedUserId;
     private final IdukaySessionContext context;
     private final RestClient restClient;
 
-    IdukayAuthenticatedSession(String authorizationToken, IdukaySessionContext context, RestClient restClient) {
+    IdukayAuthenticatedSession(
+            String authorizationToken,
+            String authenticatedUserId,
+            IdukaySessionContext context,
+            RestClient restClient) {
 
         this.authorizationToken = requireText(authorizationToken, "authorizationToken");
+        this.authenticatedUserId = optionalText(authenticatedUserId);
 
         if (context == null) {
             throw new IllegalArgumentException("context is required");
@@ -28,7 +34,16 @@ public final class IdukayAuthenticatedSession {
     public static IdukayAuthenticatedSession create(
             String authorizationToken, IdukaySessionContext context, RestClient restClient) {
 
-        return new IdukayAuthenticatedSession(authorizationToken, context, restClient);
+        return new IdukayAuthenticatedSession(authorizationToken, null, context, restClient);
+    }
+
+    public static IdukayAuthenticatedSession create(
+            String authorizationToken,
+            String authenticatedUserId,
+            IdukaySessionContext context,
+            RestClient restClient) {
+
+        return new IdukayAuthenticatedSession(authorizationToken, authenticatedUserId, context, restClient);
     }
 
     public void applyAuthorization(HttpHeaders headers) {
@@ -42,6 +57,10 @@ public final class IdukayAuthenticatedSession {
 
     public IdukaySessionContext context() {
         return context;
+    }
+
+    public String authenticatedUserId() {
+        return authenticatedUserId;
     }
 
     public RestClient httpClient() {
@@ -60,5 +79,10 @@ public final class IdukayAuthenticatedSession {
         }
 
         return value.trim();
+    }
+
+    private static String optionalText(String value) {
+
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

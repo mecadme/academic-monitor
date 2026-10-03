@@ -549,6 +549,8 @@ class IdukayAuthClientTest {
 
         IdukaySessionContext context = session.context();
 
+        assertEquals("user-test-001", session.authenticatedUserId());
+
         assertEquals("year-test-001", context.workingYear());
 
         assertEquals("school-test-001", context.workingSchool());
