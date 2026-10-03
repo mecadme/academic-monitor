@@ -259,7 +259,7 @@ public class IdukayAuthClient {
 
         IdukaySessionContext context = createSessionContext(user);
 
-        return new IdukayAuthenticatedSession(token, context, session.restClient());
+        return new IdukayAuthenticatedSession(token, profile.user(), context, session.restClient());
     }
 
     private static IdukaySessionContext createSessionContext(IdukayOauthUser user) {

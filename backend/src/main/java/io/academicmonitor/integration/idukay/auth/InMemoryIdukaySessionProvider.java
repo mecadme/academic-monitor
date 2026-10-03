@@ -1,7 +1,9 @@
 package io.academicmonitor.integration.idukay.auth;
 
 import io.academicmonitor.academic.application.port.AcademicPlatformContext;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +22,25 @@ public class InMemoryIdukaySessionProvider implements IdukaySessionProvider {
         }
 
         return session;
+    }
+
+    @Override
+    public IdukayAuthenticatedSession getSoleSessionForInstitution(UUID institutionId) {
+
+        if (institutionId == null) {
+            throw new IllegalArgumentException("institutionId is required");
+        }
+
+        List<IdukayAuthenticatedSession> institutionSessions = sessions.entrySet().stream()
+                .filter(entry -> institutionId.equals(entry.getKey().institutionId()))
+                .map(Map.Entry::getValue)
+                .toList();
+
+        if (institutionSessions.size() != 1) {
+            throw new IllegalStateException("Exactly one authenticated Idukay session is required for the institution");
+        }
+
+        return institutionSessions.getFirst();
     }
 
     public void storeSession(AcademicPlatformContext context, IdukayAuthenticatedSession session) {
