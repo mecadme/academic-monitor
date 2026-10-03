@@ -531,6 +531,7 @@ function inbox(
           id: 'student-1',
           name: 'Ana Torres',
         },
+        communication: null,
       },
     ],
   };

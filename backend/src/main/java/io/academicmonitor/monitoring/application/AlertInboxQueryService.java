@@ -8,6 +8,8 @@ import io.academicmonitor.academic.domain.Activity;
 import io.academicmonitor.academic.domain.ActivityRepository;
 import io.academicmonitor.academic.domain.Student;
 import io.academicmonitor.academic.domain.StudentRepository;
+import io.academicmonitor.communication.domain.Communication;
+import io.academicmonitor.communication.domain.CommunicationRepository;
 import io.academicmonitor.monitoring.domain.Alert;
 import io.academicmonitor.monitoring.domain.AlertRepository;
 import io.academicmonitor.monitoring.domain.AlertSeverity;
@@ -21,6 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +43,7 @@ public class AlertInboxQueryService {
     private final AlertRepository alertRepository;
     private final ActivityRepository activityRepository;
     private final StudentRepository studentRepository;
+    private final CommunicationRepository communicationRepository;
 
     public AlertInboxQueryService(
             AcademicCourseRepository courseRepository,
@@ -47,11 +51,23 @@ public class AlertInboxQueryService {
             AlertRepository alertRepository,
             ActivityRepository activityRepository,
             StudentRepository studentRepository) {
+        this(courseRepository, academicPeriodRepository, alertRepository, activityRepository, studentRepository, null);
+    }
+
+    @Autowired
+    public AlertInboxQueryService(
+            AcademicCourseRepository courseRepository,
+            AcademicPeriodRepository academicPeriodRepository,
+            AlertRepository alertRepository,
+            ActivityRepository activityRepository,
+            StudentRepository studentRepository,
+            CommunicationRepository communicationRepository) {
         this.courseRepository = courseRepository;
         this.academicPeriodRepository = academicPeriodRepository;
         this.alertRepository = alertRepository;
         this.activityRepository = activityRepository;
         this.studentRepository = studentRepository;
+        this.communicationRepository = communicationRepository;
     }
 
     @Transactional(readOnly = true)
@@ -126,14 +142,37 @@ public class AlertInboxQueryService {
                         .filter(student -> institutionId.equals(student.getInstitutionId()))
                         .toList(),
                 Student::getId);
+        Map<UUID, AlertInboxResponse.CommunicationSummary> communicationsByAlertId =
+                communicationsByAlertId(alerts, institutionId, teacherUserId);
 
         List<AlertInboxResponse.AlertItem> items = alerts.stream()
-                .map(alert -> toItem(alert, coursesById, activitiesById, studentsById))
+                .map(alert -> toItem(alert, coursesById, activitiesById, studentsById, communicationsByAlertId))
                 .filter(Objects::nonNull)
                 .sorted(ALERT_ORDER)
                 .toList();
 
         return new AlertInboxResponse(institutionId, teacherUserId, items.size(), items);
+    }
+
+    private Map<UUID, AlertInboxResponse.CommunicationSummary> communicationsByAlertId(
+            List<Alert> alerts, UUID institutionId, UUID teacherUserId) {
+        if (communicationRepository == null) {
+            return Map.of();
+        }
+        Set<UUID> alertIds =
+                alerts.stream().map(Alert::getId).filter(Objects::nonNull).collect(Collectors.toUnmodifiableSet());
+        if (alertIds.isEmpty()) {
+            return Map.of();
+        }
+        return communicationRepository.findByAlertIdIn(alertIds).stream()
+                .filter(communication -> institutionId.equals(communication.getInstitutionId()))
+                .filter(communication -> teacherUserId.equals(communication.getTeacherUserId()))
+                .filter(communication -> alertIds.contains(communication.getAlertId()))
+                .collect(Collectors.toMap(
+                        Communication::getAlertId,
+                        communication -> new AlertInboxResponse.CommunicationSummary(
+                                communication.getId(), communication.getStatus()),
+                        (first, second) -> first.id().compareTo(second.id()) >= 0 ? first : second));
     }
 
     private boolean isAllowedPeriod(List<AcademicCourse> allowedCourses, UUID academicPeriodId) {
@@ -170,7 +209,8 @@ public class AlertInboxQueryService {
             Alert alert,
             Map<UUID, AcademicCourse> coursesById,
             Map<UUID, Activity> activitiesById,
-            Map<UUID, Student> studentsById) {
+            Map<UUID, Student> studentsById,
+            Map<UUID, AlertInboxResponse.CommunicationSummary> communicationsByAlertId) {
         AcademicCourse course = coursesById.get(alert.getCourseId());
         Activity activity = activitiesById.get(alert.getActivityId());
         Student student = studentsById.get(alert.getStudentId());
@@ -188,7 +228,8 @@ public class AlertInboxQueryService {
                 new AlertInboxResponse.CourseSummary(course.getId(), course.getName(), course.getSubject()),
                 new AlertInboxResponse.ActivitySummary(
                         activity.getId(), activity.getName(), activity.getMaxScore(), activity.getDueDate()),
-                new AlertInboxResponse.StudentSummary(student.getId(), student.getFullName()));
+                new AlertInboxResponse.StudentSummary(student.getId(), student.getFullName()),
+                communicationsByAlertId.get(alert.getId()));
     }
 
     private static <T> Map<UUID, T> indexById(List<T> values, Function<T, UUID> idExtractor) {

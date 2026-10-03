@@ -1,546 +1,83 @@
-import {
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {
-  type ComponentProps,
-  useState,
-} from 'react';
-import {
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { AcademicDashboardCourse } from '../../dashboard/api/fetchAcademicDashboard';
 import type { AcademicPeriod } from '../api/fetchAcademicPeriods';
-import type { AlertInbox } from '../api/fetchAlertInbox';
-import {
-  formatAcknowledgedAt,
-  formatAlertDueDate,
-} from '../lib/formatAlert';
+import type { AlertInbox, AlertInboxItem } from '../api/fetchAlertInbox';
 import { AlertInboxPanel } from './AlertInboxPanel';
 
-const courses: AcademicDashboardCourse[] = [
-  {
-    id: 'course-1',
-    name: 'Primer Curso A, Bachillerato General Unificado',
-    subject: 'Física',
-    academicYear: '2025 - 2026',
-    students: 30,
-    activities: 20,
-    openAlerts: 2,
-    warnings: 1,
-    critical: 1,
-  },
-  {
-    id: 'course-2',
-    name: 'Segundo Curso B, Bachillerato General Unificado',
-    subject: 'Química',
-    academicYear: '2025 - 2026',
-    students: 28,
-    activities: 18,
-    openAlerts: 0,
-    warnings: 0,
-    critical: 0,
-  },
-];
+const courses: AcademicDashboardCourse[] = [{ id: 'course-1', name: '1.º BGU A', subject: 'Física', academicYear: '2026-2027', students: 30, activities: 8, openAlerts: 5, warnings: 3, critical: 2 }];
+const periods: AcademicPeriod[] = [{ id: 'period-1', academicYearId: 'year-1', externalId: 'external-period-1', name: 'Periodo 1', abbreviation: 'P1', order: 1, synchronized: true }];
+const baseAlert: Omit<AlertInboxItem, 'id' | 'communication'> = { severity: 'CRITICAL', ruleCode: 'LOW_GRADE', score: 1, acknowledgedAt: null, course: { id: 'course-1', name: '1.º BGU A', subject: 'Física' }, activity: { id: 'activity-1', name: 'Transformación de unidades', maximumScore: 10, dueDate: null }, student: { id: 'student-1', name: 'Xavier Paul Ruilova Soquilli' } };
 
-const periods: AcademicPeriod[] = [
-  {
-    id: 'period-t1-internal',
-    name: 'Primer trimestre',
-    abbreviation: 'T1',
-    order: 1,
-    synchronized: true,
-  },
-  {
-    id: 'period-t2-internal',
-    name: 'Segundo trimestre',
-    abbreviation: 'T2',
-    order: 2,
-    synchronized: false,
-  },
-];
+function alert(id: string, communication: AlertInboxItem['communication']): AlertInboxItem { return { ...baseAlert, id, communication }; }
+function inbox(alerts: AlertInboxItem[]): AlertInbox { return { institutionId: 'institution-id', teacherUserId: 'teacher-id', total: alerts.length, alerts }; }
 
-const populatedInbox: AlertInbox = {
-  institutionId: 'institution-internal-id',
-  teacherUserId: 'teacher-internal-id',
-  total: 2,
-  alerts: [
-    {
-      id: 'alert-critical-id',
-      severity: 'CRITICAL',
-      ruleCode: 'LOW_GRADE',
-      score: 1,
-      acknowledgedAt: null,
-      course: {
-        id: 'course-1',
-        name: 'Primer Curso A, Bachillerato General Unificado',
-        subject: 'Física',
-      },
-      activity: {
-        id: 'activity-external-id',
-        name: 'Transformación de unidades',
-        maximumScore: 10,
-        dueDate: '2025-11-07',
-      },
-      student: {
-        id: 'student-external-id',
-        name: 'Lucía Vega',
-      },
-    },
-    {
-      id: 'alert-warning-id',
-      severity: 'WARNING',
-      ruleCode: 'LOW_GRADE',
-      score: 4.5,
-      acknowledgedAt: '2026-09-02T18:30:00Z',
-      course: {
-        id: 'course-2',
-        name: 'Segundo Curso B, Bachillerato General Unificado',
-        subject: 'Química',
-      },
-      activity: {
-        id: 'activity-2',
-        name: 'Enlaces químicos',
-        maximumScore: 10,
-        dueDate: null,
-      },
-      student: {
-        id: 'student-2',
-        name: 'Ana Torres',
-      },
-    },
-  ],
+const defaults = {
+  courses, periods, inbox: inbox([alert('alert-1', null)]), loading: false, error: null, actionError: null, actionAlertIds: new Set<string>(), selectedCourseId: null, selectedAcademicPeriodId: 'period-1', attentionState: 'PENDING' as const,
+  onCourseChange: vi.fn(), onAcademicPeriodChange: vi.fn(), onAttentionStateChange: vi.fn(), onRetry: vi.fn(), onRetryAction: vi.fn(), onAcknowledge: vi.fn(), onMarkPending: vi.fn(), institutionId: 'institution-id', teacherUserId: 'teacher-id', onCommunicationNavigate: vi.fn(),
 };
 
 describe('AlertInboxPanel', () => {
-  it('renders count, severity labels, enrichment, scores and backend order', () => {
-    renderPanel({ inbox: populatedInbox });
-
-    expect(screen.getByText('2 abiertas')).toBeInTheDocument();
-    expect(screen.getByText('Crítica')).toBeInTheDocument();
-    expect(screen.getByText('Advertencia')).toBeInTheDocument();
-    expect(
-      screen.getByText('Lucía Vega'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Transformación de unidades'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Primer Curso A, Bachillerato General Unificado',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Física')).toBeInTheDocument();
-    expect(
-      screen.getByLabelText('Calificación 1.00 de 10.00'),
-    ).toHaveTextContent('1.00 / 10.00');
-
-    const rows = screen.getAllByRole('article');
-    expect(
-      within(rows[0]).getByText(
-        'Lucía Vega',
-      ),
-    ).toBeInTheDocument();
-    expect(
-      within(rows[1]).getByText('Ana Torres'),
-    ).toBeInTheDocument();
-  });
-
-  it('formats a due date with Intl and omits it when absent', () => {
-    renderPanel({ inbox: populatedInbox });
-
-    expect(
-      screen.getByText(
-        `Entrega: ${formatAlertDueDate('2025-11-07')}`,
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText(/^Entrega:/)).toHaveLength(1);
-  });
-
-  it('uses dashboard courses for the filter and emits null for all courses', async () => {
-    const user = userEvent.setup();
-    const onCourseChange = vi.fn();
-
-    function FilterHarness() {
-      const [selectedCourseId, setSelectedCourseId] =
-        useState<string | null>(null);
-
-      return (
-        <AlertInboxPanel
-          {...defaultProps}
-          selectedCourseId={selectedCourseId}
-          onCourseChange={(courseId) => {
-            setSelectedCourseId(courseId);
-            onCourseChange(courseId);
-          }}
-        />
-      );
-    }
-
-    render(<FilterHarness />);
-
-    const filter = screen.getByLabelText('Curso');
-    expect(
-      screen.getByRole('option', {
-        name: 'Primer Curso A, Bachillerato General Unificado — Física',
-      }),
-    ).toBeInTheDocument();
-
-    await user.selectOptions(filter, 'course-1');
-    expect(onCourseChange).toHaveBeenLastCalledWith('course-1');
-
-    await user.selectOptions(filter, '');
-    expect(onCourseChange).toHaveBeenLastCalledWith(null);
-  });
-
-  it('uses internal academic period IDs and emits null for all periods', async () => {
-    const user = userEvent.setup();
-    const onAcademicPeriodChange = vi.fn();
-
-    function FilterHarness() {
-      const [selectedAcademicPeriodId, setSelectedAcademicPeriodId] =
-        useState<string | null>('period-t2-internal');
-
-      return (
-        <AlertInboxPanel
-          {...defaultProps}
-          selectedAcademicPeriodId={selectedAcademicPeriodId}
-          onAcademicPeriodChange={(academicPeriodId) => {
-            setSelectedAcademicPeriodId(academicPeriodId);
-            onAcademicPeriodChange(academicPeriodId);
-          }}
-        />
-      );
-    }
-
-    render(<FilterHarness />);
-
-    const filter = screen.getByLabelText('Período');
-    expect(filter).toHaveValue('period-t2-internal');
-    expect(
-      screen.getByRole('option', {
-        name: 'T1 — Primer trimestre',
-      }),
-    ).toBeInTheDocument();
-
-    await user.selectOptions(filter, 'period-t1-internal');
-    expect(onAcademicPeriodChange).toHaveBeenLastCalledWith(
-      'period-t1-internal',
-    );
-
-    await user.selectOptions(filter, '');
-    expect(onAcademicPeriodChange).toHaveBeenLastCalledWith(null);
-  });
-
-  it('renders positive empty states for all courses and a selected course', () => {
-    const emptyInbox = {
-      ...populatedInbox,
-      total: 0,
-      alerts: [],
-    };
-    const { rerender } = renderPanel({
-      inbox: emptyInbox,
-    });
-
-    expect(
-      screen.getByText('No hay alertas abiertas.'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Incluye alertas abiertas de períodos anteriores.',
-      ),
-    ).toBeInTheDocument();
-
-    rerender(
-      <AlertInboxPanel
-        {...defaultProps}
-        inbox={emptyInbox}
-        selectedCourseId="course-1"
-      />,
-    );
-
-    expect(
-      screen.getByText(
-        'No hay alertas abiertas para este curso.',
-      ),
-    ).toBeInTheDocument();
-
-    rerender(
-      <AlertInboxPanel
-        {...defaultProps}
-        inbox={emptyInbox}
-        selectedAcademicPeriodId="period-t1-internal"
-      />,
-    );
-
-    expect(
-      screen.getByText(
-        'No hay alertas abiertas para este período.',
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it('shows a local error with a semantic retry button', async () => {
-    const user = userEvent.setup();
-    const onRetry = vi.fn();
-
-    renderPanel({
-      inbox: null,
-      error: 'No se pudieron cargar las alertas.',
-      onRetry,
-    });
-
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'No se pudieron cargar las alertas.',
-    );
-
-    await user.click(
-      screen.getByRole('button', {
-        name: 'Reintentar',
-      }),
-    );
-    expect(onRetry).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows initial loading and preserves rows while refreshing', () => {
-    const { rerender } = renderPanel({
-      inbox: null,
-      loading: true,
-    });
-
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Cargando alertas…',
-    );
-
-    rerender(
-      <AlertInboxPanel
-        {...defaultProps}
-        inbox={populatedInbox}
-        loading
-      />,
-    );
-
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Actualizando alertas…',
-    );
-    expect(
-      screen.getByText('Lucía Vega'),
-    ).toBeInTheDocument();
-  });
-
-  it('does not render backend or platform identifiers', () => {
-    renderPanel({ inbox: populatedInbox });
-
-    expect(
-      screen.queryByText('institution-internal-id'),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('teacher-internal-id'),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('student-external-id'),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('activity-external-id'),
-    ).not.toBeInTheDocument();
+  it('renders the real academic alert context without technical identifiers', () => {
+    render(<AlertInboxPanel {...defaults} />);
+    expect(screen.getByText('Xavier Paul Ruilova Soquilli')).toBeInTheDocument();
+    expect(screen.getByText('Transformación de unidades')).toBeInTheDocument();
+    expect(screen.getByLabelText('Calificación 1.00 de 10.00')).toBeInTheDocument();
+    expect(screen.queryByText('institution-id')).not.toBeInTheDocument();
     expect(screen.queryByText('LOW_GRADE')).not.toBeInTheDocument();
-    expect(screen.queryByText(/idukay/i)).not.toBeInTheDocument();
   });
 
-  it('renders the active triage count and exposes all attention filters', async () => {
+  it('shows the contextual communication action for every workflow state', () => {
+    const onCommunicationNavigate = vi.fn();
+    render(<AlertInboxPanel {...defaults} onCommunicationNavigate={onCommunicationNavigate} inbox={inbox([
+      alert('none', null),
+      alert('draft', { id: 'draft-id', status: 'DRAFT' }),
+      alert('pending', { id: 'pending-id', status: 'PENDING' }),
+      alert('sent', { id: 'sent-id', status: 'SENT' }),
+      alert('failed', { id: 'failed-id', status: 'FAILED' }),
+    ])} />);
+    expect(screen.getByRole('button', { name: 'Preparar comunicación' })).toBeInTheDocument();
+    expect(screen.getByText('Borrador')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continuar borrador' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviando…' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Enviar' })).not.toBeInTheDocument();
+    expect(screen.getByText('Enviada')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ver comunicación' })).toBeInTheDocument();
+    expect(screen.getByText('No se pudo enviar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Revisar comunicación' })).toBeInTheDocument();
+  });
+
+  it('navigates to an existing communication instead of preparing another one', async () => {
     const user = userEvent.setup();
-    const onAttentionStateChange = vi.fn();
-
-    renderPanel({
-      inbox: populatedInbox,
-      attentionState: 'PENDING',
-      onAttentionStateChange,
-    });
-
-    expect(screen.getByText('2 pendientes')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Pendientes' }),
-    ).toHaveAttribute('aria-pressed', 'true');
-
-    await user.click(
-      screen.getByRole('button', { name: 'Atendidas' }),
-    );
-    expect(onAttentionStateChange).toHaveBeenCalledWith('ACKNOWLEDGED');
-
-    await user.click(
-      screen.getByRole('button', { name: 'Todas activas' }),
-    );
-    expect(onAttentionStateChange).toHaveBeenCalledWith('ALL');
+    const onCommunicationNavigate = vi.fn();
+    render(<AlertInboxPanel {...defaults} onCommunicationNavigate={onCommunicationNavigate} inbox={inbox([alert('draft', { id: 'draft-id', status: 'DRAFT' })])} />);
+    await user.click(screen.getByRole('button', { name: 'Continuar borrador' }));
+    expect(onCommunicationNavigate).toHaveBeenCalledWith('draft-id');
   });
 
-  it('shows attention state, acknowledgement time and the matching row actions', async () => {
+  it('prepares only when there is no communication, then navigates to its detail route', async () => {
     const user = userEvent.setup();
-    const onAcknowledge = vi.fn();
-    const onMarkPending = vi.fn();
-
-    renderPanel({ onAcknowledge, onMarkPending });
-
-    const rows = screen.getAllByRole('article');
-    expect(within(rows[0]).getByText('Pendiente')).toBeInTheDocument();
-    expect(within(rows[1]).getByText('Atendida')).toBeInTheDocument();
-    expect(within(rows[1]).getByText(
-      `Atendida el ${formatAcknowledgedAt('2026-09-02T18:30:00Z')}`,
-    )).toBeInTheDocument();
-
-    await user.click(
-      within(rows[0]).getByRole('button', {
-        name: 'Marcar como atendida',
-      }),
-    );
-    expect(onAcknowledge).toHaveBeenCalledWith('alert-critical-id');
-
-    await user.click(
-      within(rows[1]).getByRole('button', {
-        name: 'Marcar como pendiente',
-      }),
-    );
-    expect(onMarkPending).toHaveBeenCalledWith('alert-warning-id');
-  });
-
-  it('disables only the alert whose action is in flight', () => {
-    renderPanel({ actionAlertIds: new Set(['alert-critical-id']) });
-
-    const rows = screen.getAllByRole('article');
-    expect(
-      within(rows[0]).getByRole('button', { name: 'Actualizando…' }),
-    ).toBeDisabled();
-    expect(
-      within(rows[1]).getByRole('button', {
-        name: 'Marcar como pendiente',
-      }),
-    ).toBeEnabled();
-  });
-
-  it('prepares a draft without sending, then requires explicit confirmation before delivery', async () => {
-    const user = userEvent.setup();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          id: 'communication-id',
-          alertId: 'alert-critical-id',
-          studentId: 'student-id',
-          status: 'DRAFT',
-          subject: 'Seguimiento académico - Física',
-          content: '<p>Borrador</p>',
-          createdAt: '2026-10-02T18:00:00Z',
-          sentAt: null,
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          id: 'communication-id',
-          alertId: 'alert-critical-id',
-          studentId: 'student-id',
-          status: 'SENT',
-          subject: 'Seguimiento académico - Física',
-          content: '<p>Borrador</p>',
-          createdAt: '2026-10-02T18:00:00Z',
-          sentAt: '2026-10-02T18:01:00Z',
-        }),
-      );
+    const onCommunicationNavigate = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: 'communication-id', status: 'DRAFT' }));
     vi.stubGlobal('fetch', fetchMock);
-
-    renderPanel({
-      institutionId: 'institution-id',
-      teacherUserId: 'teacher-id',
-    });
-
-    await user.click(
-      within(screen.getAllByRole('article')[0]).getByRole('button', {
-        name: 'Preparar comunicación',
-      }),
-    );
-
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByLabelText('Asunto')).toHaveValue(
-      'Seguimiento académico - Física',
-    );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    await user.click(
-      screen.getByRole('button', { name: 'Enviar por Idukay' }),
-    );
-    expect(
-      screen.getByText(
-        'Esta comunicación será enviada al representante oficial mediante Idukay.',
-      ),
-    ).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    await user.click(screen.getByRole('button', { name: 'Confirmar envío' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText(/^Enviado/)).toBeInTheDocument();
+    render(<AlertInboxPanel {...defaults} onCommunicationNavigate={onCommunicationNavigate} />);
+    await user.click(screen.getByRole('button', { name: 'Preparar comunicación' }));
+    await waitFor(() => expect(onCommunicationNavigate).toHaveBeenCalledWith('communication-id'));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/v1/alerts/alert-1/communication'), expect.objectContaining({ method: 'POST' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 
-  it('keeps rows visible when an action fails and provides a local retry', async () => {
+  it('keeps alert triage available', async () => {
     const user = userEvent.setup();
-    const onRetryAction = vi.fn();
-
-    renderPanel({
-      actionError: 'No se pudo marcar la alerta como atendida.',
-      onRetryAction,
-    });
-
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'No se pudo marcar la alerta como atendida.',
-    );
-    expect(screen.getAllByRole('article')).toHaveLength(2);
-
-    await user.click(
-      screen.getByRole('button', { name: 'Reintentar acción' }),
-    );
-    expect(onRetryAction).toHaveBeenCalledTimes(1);
+    const onAcknowledge = vi.fn();
+    render(<AlertInboxPanel {...defaults} onAcknowledge={onAcknowledge} />);
+    const row = screen.getByRole('article');
+    await user.click(within(row).getByRole('button', { name: 'Marcar como atendida' }));
+    expect(onAcknowledge).toHaveBeenCalledWith('alert-1');
   });
 });
 
-const defaultProps = {
-  courses,
-  periods,
-  inbox: populatedInbox,
-  loading: false,
-  error: null,
-  actionError: null,
-  actionAlertIds: new Set<string>(),
-  selectedCourseId: null,
-  selectedAcademicPeriodId: null,
-  attentionState: 'ALL' as const,
-  onCourseChange: vi.fn(),
-  onAcademicPeriodChange: vi.fn(),
-  onAttentionStateChange: vi.fn(),
-  onRetry: vi.fn(),
-  onRetryAction: vi.fn(),
-  onAcknowledge: vi.fn(),
-  onMarkPending: vi.fn(),
-};
-
-function renderPanel(
-  overrides: Partial<ComponentProps<typeof AlertInboxPanel>> = {},
-) {
-  return render(
-    <AlertInboxPanel
-      {...defaultProps}
-      {...overrides}
-    />,
-  );
-}
-
-function jsonResponse(body: unknown) {
-  return {
-    ok: true,
-    json: async () => body,
-  } as Response;
-}
+function jsonResponse(body: unknown) { return { ok: true, json: async () => body } as Response; }

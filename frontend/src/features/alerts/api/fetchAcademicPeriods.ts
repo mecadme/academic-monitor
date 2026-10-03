@@ -1,6 +1,9 @@
 export type AcademicPeriod = {
   id: string;
+  academicYearId: string;
+  externalId: string;
   name: string;
+  academicYear?: string | null;
   abbreviation: string | null;
   order: number;
   synchronized: boolean;

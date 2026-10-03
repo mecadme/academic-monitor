@@ -1,398 +1,123 @@
 import './App.css';
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { ChevronRight } from 'lucide-react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
+import { type AlertAttentionState } from './features/alerts/api/fetchAlertInbox';
+import { fetchCommunication, fetchCommunications, saveCommunicationDraft, sendCommunication, type Communication } from './features/alerts/api/communications';
 import { AlertInboxPanel } from './features/alerts/components/AlertInboxPanel';
-import type { AlertAttentionState } from './features/alerts/api/fetchAlertInbox';
-import { useAcademicPeriods } from './features/alerts/hooks/useAcademicPeriods';
 import { useAlertInbox } from './features/alerts/hooks/useAlertInbox';
-import { AcademicCoursePanel } from './features/dashboard/components/AcademicCoursePanel';
-import { DashboardHero } from './features/dashboard/components/DashboardHero';
-import { DashboardSummary } from './features/dashboard/components/DashboardSummary';
-import { useAcademicDashboard } from './features/dashboard/hooks/useAcademicDashboard';
-
+import type { AcademicPeriod } from './features/alerts/api/fetchAcademicPeriods';
+import { AppShell } from './components/layout/AppShell';
+import { AcademicPeriodProvider, useAcademicPeriod } from './features/context/AcademicPeriodProvider';
+import { useAcademicContext } from './features/context/hooks/useAcademicContext';
+import { type AcademicDashboard, type AcademicDashboardCourse } from './features/dashboard/api/fetchAcademicDashboard';
+import { DataStatusCard } from './features/dashboard/components/DataStatusCard';
 import { IdukayIntegrationCard } from './features/dashboard/components/IdukayIntegrationCard';
-import type { SyncIdukayPeriodResponse } from './features/idukay/api/syncIdukayPeriod';
+import { useAcademicDashboard } from './features/dashboard/hooks/useAcademicDashboard';
 import { useIdukayIntegration } from './features/idukay/hooks/useIdukayIntegration';
 
-import { AppHeader } from './components/layout/AppHeader';
-import { useAcademicContext } from './features/context/hooks/useAcademicContext';
+type Scope = { institutionId: string; teacherUserId: string; courses: AcademicDashboardCourse[]; periods: AcademicPeriod[]; selectedPeriod: AcademicPeriod | null; selectedPeriodId: string | null; selectedPeriodName: string | null; };
+type DashboardPageProps = Scope & { dashboard: AcademicDashboard | null; loading: boolean; error: string | null; onRetry: () => Promise<void>; onNavigate: (path: string) => void; idukay: ReturnType<typeof useIdukayIntegration>; };
 
 function App() {
-  const [selectedAlertCourseId, setSelectedAlertCourseId] =
-    useState<string | null>(null);
-  const [selectedAcademicPeriodId, setSelectedAcademicPeriodId] =
-    useState<string | null>(null);
-  const [selectedAlertAttentionState, setSelectedAlertAttentionState] =
-    useState<AlertAttentionState>('PENDING');
-  const [periodSelectionScope, setPeriodSelectionScope] =
-    useState<string | null>(null);
-  const initializedPeriodScope = useRef<string | null>(null);
   const context = useAcademicContext();
-  const dashboard = useAcademicDashboard({
-    institutionId: context.institutionId,
-    teacherUserId: context.teacherUserId,
-  });
-  const academicPeriods = useAcademicPeriods({
-    institutionId: context.institutionId,
-    teacherUserId: context.teacherUserId,
-  });
-  const currentPeriodScope =
-    context.institutionId && context.teacherUserId
-      ? `${context.institutionId}:${context.teacherUserId}`
-      : null;
-  const periodCatalogReady =
-    academicPeriods.catalog !== null &&
-    periodSelectionScope === currentPeriodScope;
-  const alertInbox = useAlertInbox({
-    institutionId: periodCatalogReady
-      ? context.institutionId
-      : null,
-    teacherUserId: periodCatalogReady
-      ? context.teacherUserId
-      : null,
-    courseId: selectedAlertCourseId,
-    academicPeriodId: selectedAcademicPeriodId,
-    attentionState: selectedAlertAttentionState,
-  });
-
-  useEffect(() => {
-    if (
-      !academicPeriods.catalog ||
-      !context.institutionId ||
-      !context.teacherUserId
-    ) {
-      return;
-    }
-
-    const scopeKey = `${context.institutionId}:${context.teacherUserId}`;
-
-    if (initializedPeriodScope.current !== scopeKey) {
-      initializedPeriodScope.current = scopeKey;
-      setSelectedAcademicPeriodId(
-        latestSynchronizedPeriodId(
-          academicPeriods.catalog.periods,
-        ),
-      );
-      setPeriodSelectionScope(scopeKey);
-      return;
-    }
-
-    if (
-      selectedAcademicPeriodId &&
-      !academicPeriods.catalog.periods.some(
-        (period) => period.id === selectedAcademicPeriodId,
-      )
-    ) {
-      setSelectedAcademicPeriodId(null);
-    }
-  }, [
-    academicPeriods.catalog,
-    context.institutionId,
-    context.teacherUserId,
-    selectedAcademicPeriodId,
-  ]);
-
-  useEffect(() => {
-    if (
-      selectedAlertCourseId &&
-      dashboard.dashboard &&
-      !dashboard.dashboard.courses.some(
-        (course) => course.id === selectedAlertCourseId,
-      )
-    ) {
-      setSelectedAlertCourseId(null);
-    }
-  }, [dashboard.dashboard, selectedAlertCourseId]);
-
-  const refreshAfterSync = useCallback(
-    async (result: SyncIdukayPeriodResponse) => {
-      await academicPeriods.refresh();
-
-      const periodChanged =
-        selectedAcademicPeriodId !== result.academicPeriodId;
-      setSelectedAcademicPeriodId(result.academicPeriodId);
-
-      const refreshes: Promise<unknown>[] = [
-        dashboard.refresh(),
-      ];
-
-      if (!periodChanged) {
-        refreshes.push(alertInbox.refresh());
-      }
-
-      await Promise.allSettled(refreshes);
-    },
-    [
-      academicPeriods.refresh,
-      alertInbox.refresh,
-      dashboard.refresh,
-      selectedAcademicPeriodId,
-    ],
-  );
-
-  const retryAlertPanel = useCallback(async () => {
-    if (academicPeriods.error) {
-      await academicPeriods.refresh();
-    }
-
-    if (academicPeriods.catalog) {
-      await alertInbox.refresh();
-    }
-  }, [
-    academicPeriods.catalog,
-    academicPeriods.error,
-    academicPeriods.refresh,
-    alertInbox.refresh,
-  ]);
-
-  const idukay = useIdukayIntegration({
-    institutionId: context.institutionId,
-    teacherUserId: context.teacherUserId,
-    onSyncSuccess: refreshAfterSync,
-  });
-
-  if (context.loading) {
-    return (
-      <main className="app-shell loading-shell">
-        <div className="loading-card">
-          <div className="loading-mark">
-            AM
-          </div>
-
-          <h1>
-            Academic Monitor
-          </h1>
-
-          <p>
-            Inicializando contexto académico...
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  if (context.error) {
-    return (
-      <main className="app-shell loading-shell">
-        <div className="loading-card">
-          <div className="loading-mark">
-            !
-          </div>
-
-          <h1>
-            No se pudo cargar Academic Monitor
-          </h1>
-
-          <p>
-            {context.error}
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  if (dashboard.loading && !dashboard.dashboard) {
-    return (
-      <main className="app-shell loading-shell">
-        <div className="loading-card">
-          <div className="loading-mark">
-            AM
-          </div>
-
-          <h1>
-            Academic Monitor
-          </h1>
-
-          <p>
-            Cargando dashboard académico...
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  if (dashboard.error && !dashboard.dashboard) {
-    return (
-      <main className="app-shell loading-shell">
-        <div className="loading-card">
-          <div className="loading-mark">
-            !
-          </div>
-
-          <h1>
-            No se pudo cargar Academic Monitor
-          </h1>
-
-          <p>
-            {dashboard.error}
-          </p>
-
-          <button
-            className="btn btn-primary"
-            onClick={dashboard.refresh}
-          >
-            Reintentar
-          </button>
-        </div>
-      </main>
-    );
-  }
-
-  if (!dashboard.dashboard) {
-    return (
-      <main className="app-shell loading-shell">
-        <div className="loading-card">
-          <div className="loading-mark">
-            AM
-          </div>
-
-          <h1>
-            Academic Monitor
-          </h1>
-
-          <p>
-            Cargando dashboard académico...
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  const displayedError =
-    dashboard.error ?? idukay.error;
-
-  return (
-    <main className="app-shell">
-      <AppHeader />
-
-      <DashboardHero
-        dashboard={dashboard.dashboard}
-      />
-
-      {displayedError && (
-        <section className="container">
-          <div className="error-banner">
-            <span className="error-icon">
-              !
-            </span>
-
-            <span>
-              {displayedError}
-            </span>
-          </div>
-        </section>
-      )}
-
-      <DashboardSummary
-        summary={dashboard.dashboard.summary}
-      />
-
-      <AlertInboxPanel
-        courses={dashboard.dashboard.courses}
-        periods={academicPeriods.catalog?.periods ?? []}
-        inbox={alertInbox.inbox}
-        loading={academicPeriods.loading || alertInbox.loading}
-        error={academicPeriods.error ?? alertInbox.error}
-        actionError={alertInbox.actionError}
-        actionAlertIds={alertInbox.actionAlertIds}
-        selectedCourseId={selectedAlertCourseId}
-        selectedAcademicPeriodId={selectedAcademicPeriodId}
-        attentionState={selectedAlertAttentionState}
-        onCourseChange={setSelectedAlertCourseId}
-        onAcademicPeriodChange={setSelectedAcademicPeriodId}
-        onAttentionStateChange={setSelectedAlertAttentionState}
-        onRetry={retryAlertPanel}
-        onRetryAction={alertInbox.retryAction}
-        onAcknowledge={alertInbox.acknowledge}
-        onMarkPending={alertInbox.markPending}
-        institutionId={context.institutionId}
-        teacherUserId={context.teacherUserId}
-      />
-
-      <IdukayIntegrationCard
-        connected={
-          idukay.connected
-        }
-        connecting={
-          idukay.connecting
-        }
-        syncing={
-          idukay.syncing
-        }
-        email={
-          idukay.email
-        }
-        password={
-          idukay.password
-        }
-        academicYear={
-          idukay.academicYear
-        }
-        baseScore={
-          idukay.baseScore
-        }
-        periods={
-          idukay.periods
-        }
-        selectedPeriodId={
-          idukay.selectedPeriodId
-        }
-        syncResult={
-          idukay.syncResult
-        }
-        onEmailChange={
-          idukay.setEmail
-        }
-        onPasswordChange={
-          idukay.setPassword
-        }
-        onConnect={
-          idukay.connect
-        }
-        onPeriodChange={
-          idukay.selectPeriod
-        }
-        onSync={
-          idukay.synchronizeSelectedPeriod
-        }
-      />
-
-      <AcademicCoursePanel
-        courses={dashboard.dashboard.courses}
-        refreshing={dashboard.loading}
-        onRefresh={dashboard.refresh}
-      />
-    </main>
-  );
+  if (context.loading) return <LoadingShell label="Inicializando contexto académico…" />;
+  if (context.error || !context.institutionId || !context.teacherUserId) return <ErrorShell message={context.error ?? 'No hay contexto académico disponible.'} />;
+  return <AcademicPeriodProvider institutionId={context.institutionId} teacherUserId={context.teacherUserId}><AcademicMonitor institutionId={context.institutionId} teacherUserId={context.teacherUserId} /></AcademicPeriodProvider>;
 }
 
-function latestSynchronizedPeriodId(
-  periods: Array<{
-    id: string;
-    order: number;
-    synchronized: boolean;
-  }>,
-) {
-  return periods.reduce<{
-    id: string;
-    order: number;
-  } | null>((latest, period) => {
-    if (!period.synchronized) {
-      return latest;
-    }
-
-    if (!latest || period.order >= latest.order) {
-      return period;
-    }
-
-    return latest;
-  }, null)?.id ?? null;
+function AcademicMonitor({ institutionId, teacherUserId }: Pick<Scope, 'institutionId' | 'teacherUserId'>) {
+  const period = useAcademicPeriod();
+  const [location, navigate] = useLocation();
+  const dashboard = useAcademicDashboard({ institutionId, teacherUserId, academicPeriodId: period.selectedPeriodId });
+  const idukay = useIdukayIntegration({ institutionId, teacherUserId, onSyncSuccess: async () => { await period.refresh(); await dashboard.refresh(); } });
+  const scope: Scope = { institutionId, teacherUserId, courses: dashboard.dashboard?.courses ?? [], periods: period.periods, selectedPeriod: period.selectedPeriod, selectedPeriodId: period.selectedPeriodId, selectedPeriodName: period.selectedPeriod?.name ?? null };
+  let content: ReactNode;
+  if (period.loading) content = <PageSkeleton />;
+  else if (period.error) content = <PageError message={period.error} onRetry={period.refresh} />;
+  else if (!period.selectedPeriodId) content = <EmptyState title="No hay períodos disponibles" message="Sincroniza un período académico desde Integraciones para comenzar." actionLabel="Ir a integraciones" onAction={() => navigate('/settings/integrations')} />;
+  else if (location.path === '/') content = <DashboardPage {...scope} dashboard={dashboard.dashboard} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.refresh} onNavigate={navigate} idukay={idukay} />;
+  else if (location.path === '/courses') content = <CoursesPage {...scope} dashboard={dashboard.dashboard} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.refresh} onNavigate={navigate} idukay={idukay} />;
+  else if (location.path.startsWith('/courses/')) content = <CourseDetailPage {...scope} dashboard={dashboard.dashboard} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.refresh} onNavigate={navigate} idukay={idukay} path={location.path} search={location.search} />;
+  else if (location.path === '/alerts') content = <AlertsPage {...scope} onNavigate={navigate} />;
+  else if (location.path.startsWith('/communications/')) content = <CommunicationDetailPage institutionId={institutionId} teacherUserId={teacherUserId} communicationId={decodeURIComponent(location.path.slice('/communications/'.length))} onNavigate={navigate} />;
+  else if (location.path === '/communications') content = <CommunicationsPage institutionId={institutionId} teacherUserId={teacherUserId} onNavigate={navigate} />;
+  else if (location.path === '/settings' || location.path === '/settings/integrations') content = <SettingsPage idukay={idukay} />;
+  else content = <EmptyState title="Página no encontrada" message="La dirección no corresponde a una vista de Academic Monitor." actionLabel="Volver al inicio" onAction={() => navigate('/')} />;
+  return <AppShell path={location.path} onNavigate={navigate} connected={idukay.connected}>{content}</AppShell>;
 }
+
+function DashboardPage({ dashboard, loading, error, onRetry, onNavigate, selectedPeriodName, selectedPeriod, idukay }: DashboardPageProps) {
+  if (loading && !dashboard) return <PageSkeleton />;
+  if (error && !dashboard) return <PageError message={error} onRetry={onRetry} />;
+  if (!dashboard) return <PageSkeleton />;
+  const priority = dashboard.courses.filter((course) => course.openAlerts > 0).sort((a, b) => b.critical - a.critical || b.openAlerts - a.openAlerts || a.name.localeCompare(b.name));
+  return <section className="page"><PageTitle title="Seguimiento académico" subtitle={`Resumen del ${selectedPeriodName ?? 'período seleccionado'}`} /><MetricGrid items={[[ 'Cursos', dashboard.summary.courses ], [ 'Estudiantes', dashboard.summary.students ], [ 'Alertas pendientes', dashboard.summary.openAlerts ], [ 'Alertas críticas', dashboard.summary.critical ]]} />
+    <DataStatusCard connected={idukay.connected} period={selectedPeriod} syncing={idukay.syncing} syncSucceeded={!!idukay.syncResult} syncError={idukay.error} onSync={() => { if (selectedPeriod?.externalId) void idukay.synchronizePeriod(selectedPeriod.externalId); }} />
+    <section className="content-section"><div className="section-heading"><div><p className="eyebrow">Prioridad</p><h2>Requieren tu atención</h2></div><button className="text-button" onClick={() => onNavigate('/alerts')}>Ver todas las alertas</button></div>{priority.length === 0 ? <EmptyState title="Todo está al día" message="No hay alertas activas en el período seleccionado." /> : <div className="course-grid">{priority.map((course) => <AttentionCard key={course.id} course={course} onOpen={() => onNavigate(`/courses/${course.id}`)} />)}</div>}</section></section>;
+}
+
+function CoursesPage({ dashboard, loading, error, onRetry, onNavigate, selectedPeriodName }: DashboardPageProps) {
+  if (loading && !dashboard) return <PageSkeleton />;
+  if (error && !dashboard) return <PageError message={error} onRetry={onRetry} />;
+  const courses = dashboard?.courses ?? [];
+  return <section className="page"><PageTitle title="Cursos" subtitle={`Cursos disponibles en ${selectedPeriodName ?? 'el período seleccionado'}`} />{loading && <p className="refresh-copy" role="status">Actualizando cursos…</p>}{courses.length === 0 ? <EmptyState title="No hay cursos disponibles para este período." message="Cuando se sincronicen datos académicos, aparecerán aquí." /> : <div className="course-grid">{courses.map((course) => <CourseCard key={course.id} course={course} onOpen={() => onNavigate(`/courses/${course.id}`)} />)}</div>}</section>;
+}
+
+function CourseDetailPage({ dashboard, loading, error, onRetry, path, search, onNavigate, ...scope }: DashboardPageProps & { path: string; search: string }) {
+  if (loading && !dashboard) return <PageSkeleton />;
+  if (error && !dashboard) return <PageError message={error} onRetry={onRetry} />;
+  const courseId = decodeURIComponent(path.slice('/courses/'.length)); const course = dashboard?.courses.find((item) => item.id === courseId);
+  if (!course) return <EmptyState title="Curso no disponible" message="El curso no pertenece al período seleccionado o ya no está disponible." actionLabel="Volver a cursos" onAction={() => onNavigate('/courses')} />;
+  const tab = new URLSearchParams(search).get('tab') ?? 'summary'; const setTab = (next: string) => onNavigate(`/courses/${course.id}${next === 'summary' ? '' : `?tab=${next}`}`);
+  return <section className="page"><button className="back-link" onClick={() => onNavigate('/courses')}>← Cursos</button><PageTitle title={course.subject ?? course.name} subtitle={`${course.name} · ${scope.selectedPeriodName ?? 'Período seleccionado'}`} /><MetricGrid items={[[ 'Estudiantes', course.students ], [ 'Actividades', course.activities ], [ 'Alertas pendientes', course.openAlerts ], [ 'Alertas críticas', course.critical ]]} /><div className="tabs" role="tablist" aria-label="Detalle de curso">{[['summary', 'Resumen'], ['alerts', 'Alertas'], ['students', 'Estudiantes'], ['activities', 'Actividades']].map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'is-active' : ''} onClick={() => setTab(id)}>{label}</button>)}</div>{tab === 'summary' && <section className="surface"><h2>Resumen del curso</h2><p>Consulta las alertas y el contexto académico de este curso dentro del período seleccionado.</p><button className="btn btn-primary" onClick={() => setTab('alerts')}>Ver alertas</button></section>}{tab === 'alerts' && <CourseAlerts {...scope} course={course} onNavigate={onNavigate} />}{tab === 'students' && <Unavailable title="Estudiantes aún no disponible" message="La API actual no expone el roster de un curso para esta vista." />}{tab === 'activities' && <Unavailable title="Actividades aún no disponible" message="La API actual no expone el detalle de actividades por curso para esta vista." />}</section>;
+}
+
+function AlertsPage({ onNavigate, ...scope }: Scope & { onNavigate: (path: string) => void }) { const [courseId, setCourseId] = useState<string | null>(null); const [attention, setAttention] = useState<AlertAttentionState>('PENDING'); const inbox = useAlertInbox({ institutionId: scope.institutionId, teacherUserId: scope.teacherUserId, courseId, academicPeriodId: scope.selectedPeriodId, attentionState: attention }); return <section className="page"><PageTitle title="Alertas" subtitle="Bandeja académica del período seleccionado" /><Inbox {...scope} inbox={inbox} courseId={courseId} attention={attention} onCourseChange={setCourseId} onAttentionChange={setAttention} onNavigate={onNavigate} /></section>; }
+function CourseAlerts({ course, onNavigate = () => undefined, ...scope }: Scope & { course: AcademicDashboardCourse; onNavigate?: (path: string) => void }) { const [attention, setAttention] = useState<AlertAttentionState>('PENDING'); const inbox = useAlertInbox({ institutionId: scope.institutionId, teacherUserId: scope.teacherUserId, courseId: course.id, academicPeriodId: scope.selectedPeriodId, attentionState: attention }); return <Inbox {...scope} inbox={inbox} courseId={course.id} attention={attention} onCourseChange={() => undefined} onAttentionChange={setAttention} hideCourse onNavigate={onNavigate} />; }
+type InboxProps = Scope & { inbox: ReturnType<typeof useAlertInbox>; courseId: string | null; attention: AlertAttentionState; onCourseChange: (value: string | null) => void; onAttentionChange: (value: AlertAttentionState) => void; onNavigate: (path: string) => void; hideCourse?: boolean; };
+function Inbox({ inbox, courseId, attention, onCourseChange, onAttentionChange, onNavigate, hideCourse, ...scope }: InboxProps) { return <AlertInboxPanel courses={scope.courses} periods={scope.periods} inbox={inbox.inbox} loading={inbox.loading} error={inbox.error} actionError={inbox.actionError} actionAlertIds={inbox.actionAlertIds} selectedCourseId={courseId} selectedAcademicPeriodId={scope.selectedPeriodId} attentionState={attention} onCourseChange={onCourseChange} onAcademicPeriodChange={() => undefined} onAttentionStateChange={onAttentionChange} onRetry={inbox.refresh} onRetryAction={inbox.retryAction} onAcknowledge={inbox.acknowledge} onMarkPending={inbox.markPending} institutionId={scope.institutionId} teacherUserId={scope.teacherUserId} showCourseFilter={!hideCourse} showPeriodFilter={false} onCommunicationNavigate={(communicationId) => onNavigate(`/communications/${communicationId}`)} />; }
+
+function CommunicationsPage({ institutionId, teacherUserId, onNavigate }: Pick<Scope, 'institutionId' | 'teacherUserId'> & { onNavigate: (path: string) => void }) { const [status, setStatus] = useState<Communication['status']>('DRAFT'); const [items, setItems] = useState<Communication[] | null>(null); const [error, setError] = useState<string | null>(null); const load = useCallback(async () => { setItems(null); setError(null); try { setItems(await fetchCommunications({ institutionId, teacherUserId }, status)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudieron cargar las comunicaciones.'); } }, [institutionId, status, teacherUserId]); useEffect(() => { void load(); }, [load]); return <section className="page"><PageTitle title="Comunicaciones" subtitle="Seguimiento de mensajes a representantes" /><div className="tabs" role="tablist">{([['DRAFT', 'Borradores'], ['SENT', 'Enviadas'], ['FAILED', 'Fallidas']] as Array<[Communication['status'], string]>).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={status === id} className={status === id ? 'is-active' : ''} onClick={() => setStatus(id)}>{label}</button>)}</div>{error ? <PageError message={error} onRetry={load} /> : items === null ? <PageSkeleton /> : items.length === 0 ? <EmptyState title="No hay comunicaciones en esta sección" message="Las comunicaciones preparadas desde una alerta aparecerán aquí." /> : <div className="communication-list">{items.map((item) => <article key={item.id} className="communication-card"><span className={`status-pill status-${item.status.toLowerCase()}`}>{statusLabel(item.status)}</span><h2>{item.subject}</h2>{(item.studentName || item.courseName || item.activityName) && <p className="communication-context">{[item.studentName, item.courseSubject ?? item.courseName, item.activityName].filter(Boolean).join(' · ')}</p>}<p>{item.status === 'SENT' && item.sentAt ? `Enviado ${formatDate(item.sentAt)}` : `Creado ${formatDate(item.createdAt)}`}</p>{item.status === 'FAILED' && <p className="muted">No se pudo enviar. Revisa la comunicación antes de intentarlo nuevamente.</p>}{item.status !== 'PENDING' && <button className="btn btn-secondary" type="button" onClick={() => onNavigate(`/communications/${item.id}`)}>{item.status === 'DRAFT' ? 'Continuar borrador' : item.status === 'FAILED' ? 'Revisar comunicación' : 'Ver comunicación'}</button>}</article>)}</div>}</section>; }
+
+function CommunicationDetailPage({ institutionId, teacherUserId, communicationId, onNavigate }: Pick<Scope, 'institutionId' | 'teacherUserId'> & { communicationId: string; onNavigate: (path: string) => void }) {
+  const scope = { institutionId, teacherUserId };
+  const [communication, setCommunication] = useState<Communication | null>(null);
+  const [subject, setSubject] = useState('');
+  const [content, setContent] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [confirmingSend, setConfirmingSend] = useState(false);
+  const load = useCallback(async () => { setCommunication(null); setError(null); try { const next = await fetchCommunication(communicationId, scope); setCommunication(next); setSubject(next.subject); setContent(htmlToEditableText(next.content)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo cargar la comunicación.'); } }, [communicationId, institutionId, teacherUserId]);
+  useEffect(() => { void load(); }, [load]);
+  const save = async () => { if (!communication || communication.status !== 'DRAFT' || saving) return; setSaving(true); setError(null); try { const next = await saveCommunicationDraft(communication.id, scope, subject, editableTextToHtml(content)); setCommunication(next); setSubject(next.subject); setContent(htmlToEditableText(next.content)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo guardar el borrador.'); } finally { setSaving(false); } };
+  const send = async () => { if (!communication || communication.status !== 'DRAFT' || saving) return; setSaving(true); setError(null); try { const next = await sendCommunication(communication.id, scope); setCommunication(next); setConfirmingSend(false); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo enviar la comunicación.'); } finally { setSaving(false); } };
+  if (error && !communication) return <section className="page"><button className="back-link" type="button" onClick={() => onNavigate('/communications')}>← Comunicaciones</button><PageError message={error} onRetry={load} /></section>;
+  if (!communication) return <PageSkeleton />;
+  const editable = communication.status === 'DRAFT';
+  return <section className="page communication-detail"><button className="back-link" type="button" onClick={() => onNavigate('/alerts')}>← Volver a Alertas</button><header className="communication-detail-heading"><div><h1>Comunicación al representante</h1><p>Revisa el contexto académico y redacta el mensaje para el representante oficial.</p></div><span className={`status-pill status-${communication.status.toLowerCase()}`}>{statusLabel(communication.status)}</span></header><AcademicContext communication={communication} />{error && <div className="alert-local-error" role="alert"><p>{error}</p></div>}<section className="communication-editor surface"><label htmlFor="communication-subject">Asunto<input id="communication-subject" value={subject} disabled={!editable || saving} onChange={(event) => setSubject(event.target.value)} /></label><label htmlFor="communication-content">Mensaje<textarea id="communication-content" value={content} disabled={!editable || saving} onChange={(event) => setContent(event.target.value)} rows={14} /></label>{editable ? <div className="communication-editor-actions"><button className="btn btn-secondary" type="button" disabled={saving} onClick={() => void save()}>{saving ? 'Guardando…' : 'Guardar borrador'}</button><button className="btn btn-primary" type="button" disabled={saving} onClick={() => setConfirmingSend(true)}>Enviar por Idukay</button></div> : <p className="muted">{communication.status === 'PENDING' ? 'La comunicación está en proceso de envío.' : communication.status === 'SENT' ? `Enviada${communication.sentAt ? ` el ${formatDate(communication.sentAt)}` : ''}.` : 'La comunicación no se puede editar desde su estado actual.'}</p>}</section>{confirmingSend && <section className="send-confirmation" role="dialog" aria-modal="true" aria-labelledby="send-confirmation-title"><div><h2 id="send-confirmation-title">Confirmar envío</h2><p>Esta comunicación será enviada al representante oficial mediante Idukay.</p><div className="communication-editor-actions"><button className="btn btn-secondary" type="button" disabled={saving} onClick={() => setConfirmingSend(false)}>Cancelar</button><button className="btn btn-primary" type="button" disabled={saving} onClick={() => void send()}>{saving ? 'Enviando…' : 'Enviar'}</button></div></div></section>}</section>;
+}
+
+function AcademicContext({ communication }: { communication: Communication }) { return <section className="academic-context surface" aria-label="Contexto académico"><div><p className="context-label">Estudiante</p><h2>{communication.studentName ?? 'Estudiante sin nombre disponible'}</h2></div>{(communication.courseName || communication.courseSubject) && <div><p className="context-label">Curso · asignatura</p><p>{[communication.courseSubject, communication.courseName].filter(Boolean).join(' · ')}</p></div>}{communication.activityName && <div><p className="context-label">Actividad</p><p>{communication.activityName}</p></div>}{communication.score !== null && communication.maximumScore !== null && <div><p className="context-label">Calificación</p><strong>{formatScore(communication.score)} / {formatScore(communication.maximumScore)}</strong></div>}{communication.alertSeverity && <div><p className="context-label">Severidad</p><span className={`severity-context severity-${communication.alertSeverity.toLowerCase()}`}>{communication.alertSeverity === 'CRITICAL' ? 'Crítica' : 'Advertencia'}</span></div>}</section>; }
+
+function SettingsPage({ idukay }: { idukay: ReturnType<typeof useIdukayIntegration> }) { return <section className="page"><PageTitle title="Integraciones" subtitle="Conecta y sincroniza las fuentes académicas de la institución" /><IdukayIntegrationCard connected={idukay.connected} connecting={idukay.connecting} syncing={idukay.syncing} email={idukay.email} password={idukay.password} academicYear={idukay.academicYear} baseScore={idukay.baseScore} periods={idukay.periods} selectedPeriodId={idukay.selectedPeriodId} syncResult={idukay.syncResult} onEmailChange={idukay.setEmail} onPasswordChange={idukay.setPassword} onConnect={idukay.connect} onPeriodChange={idukay.selectPeriod} onSync={idukay.synchronizeSelectedPeriod} /></section>; }
+
+function CourseCard({ course, onOpen }: { course: AcademicDashboardCourse; onOpen: () => void }) { const href = `/courses/${course.id}`; return <a className="course-card course-card-link" href={href} onClick={(event) => { event.preventDefault(); onOpen(); }}><p className="eyebrow">{course.subject ?? 'Asignatura'}</p><h2>{course.name}</h2><dl><div><dt>Estudiantes</dt><dd>{course.students}</dd></div><div><dt>Alertas activas</dt><dd>{course.openAlerts}</dd></div>{course.critical > 0 && <div><dt>Críticas</dt><dd>{course.critical}</dd></div>}</dl><ChevronRight className="course-card-chevron" aria-hidden="true" size={20} /></a>; }
+function AttentionCard({ course, onOpen }: { course: AcademicDashboardCourse; onOpen: () => void }) { const href = `/courses/${course.id}`; return <a className="attention-course course-card-link" href={href} onClick={(event) => { event.preventDefault(); onOpen(); }}><div><p className="eyebrow">{course.subject ?? 'Asignatura'}</p><h3>{course.name}</h3><p>{course.openAlerts} alertas{course.critical ? ` · ${course.critical} críticas` : ''}</p></div><ChevronRight className="course-card-chevron" aria-hidden="true" size={20} /></a>; }
+function MetricGrid({ items }: { items: Array<[string, number]> }) { return <div className="metric-grid">{items.map(([label, value]) => <article key={label} className="metric-card"><span>{label}</span><strong>{value}</strong></article>)}</div>; }
+function PageTitle({ title, subtitle }: { title: string; subtitle: string }) { return <header className="page-title"><h1>{title}</h1><p>{subtitle}</p></header>; }
+function EmptyState({ title, message, actionLabel, onAction }: { title: string; message: string; actionLabel?: string; onAction?: () => void }) { return <section className="empty-state"><h2>{title}</h2><p>{message}</p>{actionLabel && onAction && <button className="btn btn-primary" onClick={onAction}>{actionLabel}</button>}</section>; }
+function Unavailable({ title, message }: { title: string; message: string }) { return <section className="surface"><h2>{title}</h2><p>{message}</p></section>; }
+function PageSkeleton() { return <section className="page"><div className="skeleton heading" /><div className="metric-grid">{[1, 2, 3, 4].map((item) => <div key={item} className="skeleton metric" />)}</div><div className="skeleton content" /></section>; }
+function PageError({ message, onRetry }: { message: string; onRetry: () => void | Promise<void> }) { return <section className="error-state" role="alert"><h2>No se pudo cargar esta vista</h2><p>{message}</p><button className="btn btn-primary" onClick={() => void onRetry()}>Reintentar</button></section>; }
+function LoadingShell({ label }: { label: string }) { return <main className="loading-shell"><div className="loading-card"><div className="loading-mark">AM</div><h1>Academic Monitor</h1><p>{label}</p></div></main>; }
+function ErrorShell({ message }: { message: string }) { return <main className="loading-shell"><div className="loading-card"><div className="loading-mark">!</div><h1>No se pudo cargar Academic Monitor</h1><p>{message}</p></div></main>; }
+function statusLabel(status: Communication['status']) { return ({ DRAFT: 'Borrador', PENDING: 'Enviando…', SENT: 'Enviado', FAILED: 'No se pudo enviar' })[status]; }
+function formatDate(value: string) { return new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); }
+function formatScore(value: number) { return new Intl.NumberFormat('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
+function htmlToEditableText(html: string) { const source = html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(?:p|div|li|h[1-6])>/gi, '\n\n'); const document = new DOMParser().parseFromString(source, 'text/html'); document.querySelectorAll('script,style,iframe,object,embed').forEach((element) => element.remove()); return (document.body.textContent ?? '').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim(); }
+function editableTextToHtml(text: string) { const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); return escaped.split(/\n{2,}/).map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`).join(''); }
+function useLocation(): [{ path: string; search: string }, (target: string) => void] { const read = () => ({ path: window.location.pathname, search: window.location.search }); const [location, setLocation] = useState(read); useEffect(() => { const update = () => setLocation(read()); window.addEventListener('popstate', update); return () => window.removeEventListener('popstate', update); }, []); return [location, (target) => { window.history.pushState({}, '', target); setLocation(read()); }]; }
 
 export default App;

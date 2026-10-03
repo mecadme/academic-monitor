@@ -14,6 +14,9 @@ import io.academicmonitor.academic.domain.Activity;
 import io.academicmonitor.academic.domain.ActivityRepository;
 import io.academicmonitor.academic.domain.Student;
 import io.academicmonitor.academic.domain.StudentRepository;
+import io.academicmonitor.communication.domain.Communication;
+import io.academicmonitor.communication.domain.CommunicationRepository;
+import io.academicmonitor.communication.domain.CommunicationStatus;
 import io.academicmonitor.monitoring.domain.Alert;
 import io.academicmonitor.monitoring.domain.AlertRepository;
 import io.academicmonitor.monitoring.domain.AlertSeverity;
@@ -52,6 +55,7 @@ class AlertInboxQueryServiceTest {
     private AlertRepository alertRepository;
     private ActivityRepository activityRepository;
     private StudentRepository studentRepository;
+    private CommunicationRepository communicationRepository;
     private AlertInboxQueryService service;
 
     @BeforeEach
@@ -61,6 +65,7 @@ class AlertInboxQueryServiceTest {
         alertRepository = mock(AlertRepository.class);
         activityRepository = mock(ActivityRepository.class);
         studentRepository = mock(StudentRepository.class);
+        communicationRepository = mock(CommunicationRepository.class);
         service = new AlertInboxQueryService(
                 courseRepository, academicPeriodRepository, alertRepository, activityRepository, studentRepository);
     }
@@ -245,6 +250,55 @@ class AlertInboxQueryServiceTest {
         assertEquals(COURSE_A_ID, result.alerts().getFirst().course().id());
         verify(alertRepository)
                 .findByInstitutionIdAndCourseIdInAndStatus(INSTITUTION_ID, Set.of(COURSE_A_ID), AlertStatus.OPEN);
+    }
+
+    @Test
+    void projectsTheScopedCommunicationSummaryWithOneBatchQuery() {
+        AcademicCourse course = course(COURSE_A_ID, "Course A", "Physics");
+        Activity activity = activity(ACTIVITY_A_ID, COURSE_A_ID, "Activity A", "2026-01-15");
+        Student student = student(STUDENT_A_ID, INSTITUTION_ID, "Ana Torres");
+        Alert alert = alert(
+                ALERT_CRITICAL_LOW_ID,
+                INSTITUTION_ID,
+                COURSE_A_ID,
+                ACTIVITY_A_ID,
+                STUDENT_A_ID,
+                AlertSeverity.CRITICAL,
+                "4.50",
+                true);
+        UUID communicationId = UUID.fromString("99999999-9999-9999-9999-999999999999");
+        Communication communication = mock(Communication.class);
+        when(communication.getId()).thenReturn(communicationId);
+        when(communication.getAlertId()).thenReturn(ALERT_CRITICAL_LOW_ID);
+        when(communication.getInstitutionId()).thenReturn(INSTITUTION_ID);
+        when(communication.getTeacherUserId()).thenReturn(TEACHER_USER_ID);
+        when(communication.getStatus()).thenReturn(CommunicationStatus.DRAFT);
+
+        when(courseRepository.findByInstitutionIdAndTeacherUserId(INSTITUTION_ID, TEACHER_USER_ID))
+                .thenReturn(List.of(course));
+        when(alertRepository.findByInstitutionIdAndCourseIdInAndStatus(
+                        INSTITUTION_ID, Set.of(COURSE_A_ID), AlertStatus.OPEN))
+                .thenReturn(List.of(alert));
+        when(activityRepository.findActivitiesByCourseIdIn(Set.of(COURSE_A_ID))).thenReturn(List.of(activity));
+        when(studentRepository.findByInstitutionIdAndIdIn(INSTITUTION_ID, Set.of(STUDENT_A_ID)))
+                .thenReturn(List.of(student));
+        when(communicationRepository.findByAlertIdIn(Set.of(ALERT_CRITICAL_LOW_ID)))
+                .thenReturn(List.of(communication));
+        AlertInboxQueryService scopedService = new AlertInboxQueryService(
+                courseRepository,
+                academicPeriodRepository,
+                alertRepository,
+                activityRepository,
+                studentRepository,
+                communicationRepository);
+
+        AlertInboxResponse result = scopedService.getInbox(INSTITUTION_ID, TEACHER_USER_ID, null);
+
+        assertEquals(communicationId, result.alerts().getFirst().communication().id());
+        assertEquals(
+                CommunicationStatus.DRAFT,
+                result.alerts().getFirst().communication().status());
+        verify(communicationRepository).findByAlertIdIn(Set.of(ALERT_CRITICAL_LOW_ID));
     }
 
     @Test

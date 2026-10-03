@@ -94,9 +94,14 @@ public class AcademicPeriodCatalogQueryService {
                         .sorted(periodOrder)
                         .map(period -> new AcademicPeriodCatalogResponse.AcademicPeriodItem(
                                 period.getId(),
+                                period.getAcademicYearId(),
+                                period.getExternalId(),
                                 period.getName(),
                                 period.getAbbreviation(),
                                 period.getOrder(),
+                                academicYearsById
+                                        .get(period.getAcademicYearId())
+                                        .getName(),
                                 synchronizedPeriodIds.contains(period.getId())))
                         .toList();
 

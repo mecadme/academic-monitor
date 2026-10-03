@@ -90,7 +90,7 @@ public class AlertCommunicationService {
                 .max(Comparator.comparing(
                         Communication::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
                 .orElse(null);
-        if (draft != null) return CommunicationResponse.from(draft);
+        if (draft != null) return responseFor(draft);
         if (existing.stream().anyMatch(communication -> communication.getStatus() == CommunicationStatus.SENT)) {
             throw error(CommunicationWorkflowError.COMMUNICATION_ALREADY_SENT);
         }
@@ -123,12 +123,23 @@ public class AlertCommunicationService {
                 deliveryPort.providerCode(),
                 message.subject(),
                 message.content());
-        return CommunicationResponse.from(communicationRepository.save(communication));
+        return responseFor(communicationRepository.save(communication));
     }
 
     @Transactional(readOnly = true)
     public CommunicationResponse get(UUID institutionId, UUID teacherUserId, UUID communicationId) {
-        return CommunicationResponse.from(ownedCommunication(institutionId, teacherUserId, communicationId));
+        return responseFor(ownedCommunication(institutionId, teacherUserId, communicationId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<CommunicationResponse> list(UUID institutionId, UUID teacherUserId, CommunicationStatus status) {
+        return communicationRepository.findByInstitutionIdAndTeacherUserId(institutionId, teacherUserId).stream()
+                .filter(communication -> status == null || status == communication.getStatus())
+                .sorted(Comparator.comparing(
+                                Communication::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Communication::getId))
+                .map(this::responseFor)
+                .toList();
     }
 
     @Transactional
@@ -140,7 +151,7 @@ public class AlertCommunicationService {
             throw error(CommunicationWorkflowError.COMMUNICATION_NOT_EDITABLE);
         }
         communication.editDraft(subject.trim(), content.trim());
-        return CommunicationResponse.from(communicationRepository.save(communication));
+        return responseFor(communicationRepository.save(communication));
     }
 
     public CommunicationResponse send(UUID institutionId, UUID teacherUserId, UUID communicationId) {
@@ -168,6 +179,36 @@ public class AlertCommunicationService {
             workflowStore.markFailed(communicationId, "PROVIDER_UNAVAILABLE");
         }
         return get(institutionId, teacherUserId, communicationId);
+    }
+
+    private CommunicationResponse responseFor(Communication communication) {
+        Student student =
+                studentRepository.findStudentById(communication.getStudentId()).orElse(null);
+        Alert alert = alertRepository.findById(communication.getAlertId()).orElse(null);
+        AcademicCourse course = alert == null
+                ? null
+                : courseRepository
+                        .findByInstitutionIdAndTeacherUserId(
+                                communication.getInstitutionId(), communication.getTeacherUserId())
+                        .stream()
+                        .filter(value -> alert.getCourseId().equals(value.getId()))
+                        .findFirst()
+                        .orElse(null);
+        Activity activity = course == null || alert == null
+                ? null
+                : activityRepository.findActivitiesByCourseIdIn(Set.of(course.getId())).stream()
+                        .filter(value -> alert.getActivityId().equals(value.getId()))
+                        .findFirst()
+                        .orElse(null);
+        return CommunicationResponse.from(
+                communication,
+                student == null ? null : student.getFullName(),
+                course == null ? null : course.getName(),
+                course == null ? null : course.getSubject(),
+                activity == null ? null : activity.getName(),
+                alert == null ? null : alert.getScoreSnapshot(),
+                activity == null ? null : activity.getMaxScore(),
+                alert == null ? null : alert.getSeverity());
     }
 
     private Alert ownedAlert(UUID institutionId, UUID teacherUserId, UUID alertId) {
@@ -237,6 +278,12 @@ public class AlertCommunicationService {
         String normalized = content.toLowerCase(java.util.Locale.ROOT);
         if (normalized.contains("<script")
                 || normalized.contains("javascript:")
+                || normalized.contains("<iframe")
+                || normalized.contains("<object")
+                || normalized.contains("<embed")
+                || normalized.contains("<link")
+                || normalized.contains("<style")
+                || normalized.contains("data:text/html")
                 || normalized.matches("(?s).*\\s+on[a-z]+\\s*=.*")) {
             throw new IllegalArgumentException("content contains unsupported HTML");
         }

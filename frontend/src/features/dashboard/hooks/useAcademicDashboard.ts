@@ -12,14 +12,18 @@ import {
 type UseAcademicDashboardInput = {
   institutionId: string | null;
   teacherUserId: string | null;
+  academicPeriodId?: string | null;
 };
 
 export function useAcademicDashboard({
   institutionId,
   teacherUserId,
+  academicPeriodId = null,
 }: UseAcademicDashboardInput) {
   const [dashboard, setDashboard] =
     useState<AcademicDashboard | null>(null);
+  const [loadedScope, setLoadedScope] =
+    useState<string | null>(null);
   const [loading, setLoading] =
     useState(false);
   const [error, setError] =
@@ -29,12 +33,15 @@ export function useAcademicDashboard({
     async (signal?: AbortSignal) => {
       if (!institutionId || !teacherUserId) {
         setDashboard(null);
+        setLoadedScope(null);
         setLoading(false);
         setError(null);
         return;
       }
 
       try {
+        setDashboard(null);
+        setLoadedScope(null);
         setLoading(true);
         setError(null);
 
@@ -42,11 +49,15 @@ export function useAcademicDashboard({
           await fetchAcademicDashboard({
             institutionId,
             teacherUserId,
+            academicPeriodId,
             signal,
           });
 
         if (!signal?.aborted) {
           setDashboard(result);
+          setLoadedScope(
+            [institutionId, teacherUserId, academicPeriodId ?? 'none'].join(':'),
+          );
         }
       } catch (err) {
         if (signal?.aborted) {
@@ -64,7 +75,7 @@ export function useAcademicDashboard({
         }
       }
     },
-    [institutionId, teacherUserId],
+    [academicPeriodId, institutionId, teacherUserId],
   );
 
   useEffect(() => {
@@ -84,9 +95,12 @@ export function useAcademicDashboard({
     [loadDashboard],
   );
 
+  const requestedScope =
+    [institutionId, teacherUserId, academicPeriodId ?? 'none'].join(':');
   const scopedDashboard =
     dashboard?.institutionId === institutionId &&
-    dashboard.teacherUserId === teacherUserId
+    dashboard.teacherUserId === teacherUserId &&
+    loadedScope === requestedScope
       ? dashboard
       : null;
 

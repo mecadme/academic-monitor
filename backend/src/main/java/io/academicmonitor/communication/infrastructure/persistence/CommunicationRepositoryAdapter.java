@@ -30,4 +30,14 @@ class CommunicationRepositoryAdapter implements CommunicationRepository {
     public List<Communication> findByAlertId(UUID alertId) {
         return repository.findByAlertId(alertId);
     }
+
+    @Override
+    public List<Communication> findByAlertIdIn(java.util.Collection<UUID> alertIds) {
+        return repository.findByAlertIdIn(alertIds);
+    }
+
+    @Override
+    public List<Communication> findByInstitutionIdAndTeacherUserId(UUID institutionId, UUID teacherUserId) {
+        return repository.findByInstitutionIdAndTeacherUserId(institutionId, teacherUserId);
+    }
 }

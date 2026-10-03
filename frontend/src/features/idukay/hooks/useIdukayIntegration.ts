@@ -124,11 +124,11 @@ export function useIdukayIntegration({
     }
   }
 
-  async function synchronizeSelectedPeriod() {
+  async function synchronizePeriod(periodExternalId: string) {
     if (
       !institutionId ||
       !teacherUserId ||
-      !selectedPeriodId
+      !periodExternalId
     ) {
       setError(
         'No hay un período académico válido para sincronizar.',
@@ -146,21 +146,21 @@ export function useIdukayIntegration({
           institutionId,
           teacherUserId,
           periodExternalId:
-          selectedPeriodId,
+          periodExternalId,
         });
 
       setSyncResult(result);
 
       await onSyncSuccess?.(result);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'No se pudo sincronizar el período de Idukay.',
-      );
+    } catch {
+      setError('No se pudo completar la sincronización.');
     } finally {
       setSyncing(false);
     }
+  }
+
+  async function synchronizeSelectedPeriod() {
+    await synchronizePeriod(selectedPeriodId);
   }
 
   function selectPeriod(
@@ -216,6 +216,7 @@ export function useIdukayIntegration({
 
     connect,
     selectPeriod,
+    synchronizePeriod,
     synchronizeSelectedPeriod,
   };
 }

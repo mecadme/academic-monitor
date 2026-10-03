@@ -78,12 +78,15 @@ class AcademicPeriodCatalogQueryServiceTest {
                         .toList());
         assertFalse(result.periods().getFirst().synchronizedPeriod());
         assertTrue(result.periods().get(1).synchronizedPeriod());
+        assertEquals(YEAR_ID, result.periods().getFirst().academicYearId());
+        assertEquals("external-" + T1_ID, result.periods().getFirst().externalId());
     }
 
     private static AcademicPeriod period(UUID id, UUID academicYearId, String name, String abbreviation, int order) {
         AcademicPeriod period = mock(AcademicPeriod.class);
         when(period.getId()).thenReturn(id);
         when(period.getAcademicYearId()).thenReturn(academicYearId);
+        when(period.getExternalId()).thenReturn("external-" + id);
         when(period.getName()).thenReturn(name);
         when(period.getAbbreviation()).thenReturn(abbreviation);
         when(period.getOrder()).thenReturn(order);

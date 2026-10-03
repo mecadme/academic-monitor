@@ -27,6 +27,7 @@ export type AcademicDashboardCourse = {
 export type FetchAcademicDashboardInput = {
   institutionId: string;
   teacherUserId: string;
+  academicPeriodId?: string | null;
   signal?: AbortSignal;
 };
 
@@ -37,12 +38,14 @@ const apiBaseUrl =
 export async function fetchAcademicDashboard({
   institutionId,
   teacherUserId,
+  academicPeriodId,
   signal,
 }: FetchAcademicDashboardInput): Promise<AcademicDashboard> {
   const query = new URLSearchParams({
     institutionId,
     teacherUserId,
   });
+  if (academicPeriodId) query.set('academicPeriodId', academicPeriodId);
 
   const response = await fetch(
     `${apiBaseUrl}/api/v1/dashboard?${query.toString()}`,

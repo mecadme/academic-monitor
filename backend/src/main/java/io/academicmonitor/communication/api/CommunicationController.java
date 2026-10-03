@@ -2,6 +2,8 @@ package io.academicmonitor.communication.api;
 
 import io.academicmonitor.communication.application.AlertCommunicationService;
 import io.academicmonitor.communication.application.CommunicationResponse;
+import io.academicmonitor.communication.domain.CommunicationStatus;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -19,6 +21,14 @@ public class CommunicationController {
 
     public CommunicationController(AlertCommunicationService service) {
         this.service = service;
+    }
+
+    @GetMapping
+    public List<CommunicationResponse> list(
+            @RequestParam UUID institutionId,
+            @RequestParam UUID teacherUserId,
+            @RequestParam(required = false) CommunicationStatus status) {
+        return service.list(institutionId, teacherUserId, status);
     }
 
     @GetMapping("/{communicationId}")
