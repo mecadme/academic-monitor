@@ -66,7 +66,10 @@ class AlertInboxControllerTest {
                                 "Movimiento rectilíneo",
                                 new BigDecimal("10.00"),
                                 LocalDate.of(2026, 1, 15)),
-                        new AlertInboxResponse.StudentSummary(STUDENT_ID, "Ana Torres"))));
+                        new AlertInboxResponse.StudentSummary(STUDENT_ID, "Ana Torres"),
+                        new AlertInboxResponse.CommunicationSummary(
+                                UUID.fromString("55555555-5555-5555-5555-555555555555"),
+                                io.academicmonitor.communication.domain.CommunicationStatus.DRAFT))));
 
         when(service.getInbox(
                         INSTITUTION_ID, TEACHER_USER_ID, COURSE_ID, ACADEMIC_PERIOD_ID, AlertAttentionState.PENDING))
@@ -95,7 +98,9 @@ class AlertInboxControllerTest {
                 .andExpect(jsonPath("$.alerts[0].activity.maximumScore").value(10.0))
                 .andExpect(jsonPath("$.alerts[0].activity.dueDate").value("2026-01-15"))
                 .andExpect(jsonPath("$.alerts[0].student.id").value(STUDENT_ID.toString()))
-                .andExpect(jsonPath("$.alerts[0].student.name").value("Ana Torres"));
+                .andExpect(jsonPath("$.alerts[0].student.name").value("Ana Torres"))
+                .andExpect(jsonPath("$.alerts[0].communication.id").value("55555555-5555-5555-5555-555555555555"))
+                .andExpect(jsonPath("$.alerts[0].communication.status").value("DRAFT"));
 
         verify(service)
                 .getInbox(INSTITUTION_ID, TEACHER_USER_ID, COURSE_ID, ACADEMIC_PERIOD_ID, AlertAttentionState.PENDING);

@@ -12,8 +12,11 @@ public record AcademicPeriodCatalogResponse(UUID institutionId, UUID teacherUser
 
     public record AcademicPeriodItem(
             UUID id,
+            UUID academicYearId,
+            String externalId,
             String name,
             String abbreviation,
             int order,
+            String academicYear,
             @JsonProperty("synchronized") boolean synchronizedPeriod) {}
 }

@@ -2,6 +2,8 @@ package io.academicmonitor.dashboard.application;
 
 import io.academicmonitor.academic.domain.AcademicCourse;
 import io.academicmonitor.academic.domain.AcademicCourseRepository;
+import io.academicmonitor.academic.domain.AcademicPeriod;
+import io.academicmonitor.academic.domain.AcademicPeriodRepository;
 import io.academicmonitor.academic.domain.AcademicYear;
 import io.academicmonitor.academic.domain.AcademicYearRepository;
 import io.academicmonitor.academic.domain.Activity;
@@ -21,6 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +35,7 @@ public class AcademicDashboardQueryService {
     private final ActivityRepository activityRepository;
     private final AcademicYearRepository academicYearRepository;
     private final AlertRepository alertRepository;
+    private final AcademicPeriodRepository academicPeriodRepository;
 
     public AcademicDashboardQueryService(
             AcademicCourseRepository courseRepository,
@@ -39,20 +43,38 @@ public class AcademicDashboardQueryService {
             ActivityRepository activityRepository,
             AcademicYearRepository academicYearRepository,
             AlertRepository alertRepository) {
+        this(courseRepository, enrollmentRepository, activityRepository, academicYearRepository, alertRepository, null);
+    }
+
+    @Autowired
+    public AcademicDashboardQueryService(
+            AcademicCourseRepository courseRepository,
+            CourseEnrollmentRepository enrollmentRepository,
+            ActivityRepository activityRepository,
+            AcademicYearRepository academicYearRepository,
+            AlertRepository alertRepository,
+            AcademicPeriodRepository academicPeriodRepository) {
         this.courseRepository = courseRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.activityRepository = activityRepository;
         this.academicYearRepository = academicYearRepository;
         this.alertRepository = alertRepository;
+        this.academicPeriodRepository = academicPeriodRepository;
     }
 
     @Transactional(readOnly = true)
     public AcademicDashboardResponse getDashboard(UUID institutionId, UUID teacherUserId) {
+        return getDashboard(institutionId, teacherUserId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public AcademicDashboardResponse getDashboard(UUID institutionId, UUID teacherUserId, UUID academicPeriodId) {
         Objects.requireNonNull(institutionId, "institutionId is required");
         Objects.requireNonNull(teacherUserId, "teacherUserId is required");
 
-        List<AcademicCourse> courses =
+        List<AcademicCourse> allowedCourses =
                 courseRepository.findByInstitutionIdAndTeacherUserId(institutionId, teacherUserId);
+        List<AcademicCourse> courses = filterCoursesForPeriod(allowedCourses, academicPeriodId);
 
         if (courses.isEmpty()) {
             return emptyDashboard(institutionId, teacherUserId);
@@ -61,9 +83,19 @@ public class AcademicDashboardQueryService {
         Set<UUID> courseIds = courses.stream().map(AcademicCourse::getId).collect(Collectors.toUnmodifiableSet());
 
         List<CourseEnrollment> enrollments = enrollmentRepository.findEnrollmentsByCourseIdIn(courseIds);
-        List<Activity> activities = activityRepository.findActivitiesByCourseIdIn(courseIds);
+        List<Activity> activities = activityRepository.findActivitiesByCourseIdIn(courseIds).stream()
+                .filter(activity -> academicPeriodId == null || academicPeriodId.equals(activity.getAcademicPeriodId()))
+                .toList();
+        Set<UUID> activityIds = activities.stream()
+                .map(Activity::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
         List<Alert> openAlerts =
-                alertRepository.findByInstitutionIdAndCourseIdInAndStatus(institutionId, courseIds, AlertStatus.OPEN);
+                alertRepository
+                        .findByInstitutionIdAndCourseIdInAndStatus(institutionId, courseIds, AlertStatus.OPEN)
+                        .stream()
+                        .filter(alert -> academicPeriodId == null || activityIds.contains(alert.getActivityId()))
+                        .toList();
 
         Map<UUID, Long> studentsByCourse = enrollments.stream()
                 .collect(Collectors.groupingBy(
@@ -101,6 +133,29 @@ public class AcademicDashboardQueryService {
                         totals.warnings(),
                         totals.critical()),
                 courseSummaries);
+    }
+
+    private List<AcademicCourse> filterCoursesForPeriod(List<AcademicCourse> courses, UUID academicPeriodId) {
+        if (academicPeriodId == null) {
+            return courses;
+        }
+        if (academicPeriodRepository == null) {
+            return List.of();
+        }
+        Set<UUID> yearIds = courses.stream()
+                .map(AcademicCourse::getAcademicYearId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
+        AcademicPeriod period = academicPeriodRepository.findByAcademicYearIdIn(yearIds).stream()
+                .filter(value -> academicPeriodId.equals(value.getId()))
+                .findFirst()
+                .orElse(null);
+        if (period == null) {
+            return List.of();
+        }
+        return courses.stream()
+                .filter(course -> period.getAcademicYearId().equals(course.getAcademicYearId()))
+                .toList();
     }
 
     private Map<UUID, String> loadAcademicYears(UUID institutionId, List<AcademicCourse> courses) {

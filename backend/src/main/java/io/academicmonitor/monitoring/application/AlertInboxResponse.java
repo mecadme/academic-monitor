@@ -1,5 +1,6 @@
 package io.academicmonitor.monitoring.application;
 
+import io.academicmonitor.communication.domain.CommunicationStatus;
 import io.academicmonitor.monitoring.domain.AlertSeverity;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -21,11 +22,14 @@ public record AlertInboxResponse(UUID institutionId, UUID teacherUserId, long to
             Instant acknowledgedAt,
             CourseSummary course,
             ActivitySummary activity,
-            StudentSummary student) {}
+            StudentSummary student,
+            CommunicationSummary communication) {}
 
     public record CourseSummary(UUID id, String name, String subject) {}
 
     public record ActivitySummary(UUID id, String name, BigDecimal maximumScore, LocalDate dueDate) {}
 
     public record StudentSummary(UUID id, String name) {}
+
+    public record CommunicationSummary(UUID id, CommunicationStatus status) {}
 }

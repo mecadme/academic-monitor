@@ -21,6 +21,7 @@ class AcademicPeriodControllerTest {
     private static final UUID INSTITUTION_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID TEACHER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID PERIOD_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final UUID ACADEMIC_YEAR_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
 
     private AcademicPeriodCatalogQueryService service;
     private MockMvc mockMvc;
@@ -38,7 +39,14 @@ class AcademicPeriodControllerTest {
                 INSTITUTION_ID,
                 TEACHER_ID,
                 List.of(new AcademicPeriodCatalogResponse.AcademicPeriodItem(
-                        PERIOD_ID, "Primer trimestre", "T1", 1, true)));
+                        PERIOD_ID,
+                        ACADEMIC_YEAR_ID,
+                        "period-external-id",
+                        "Primer trimestre",
+                        "T1",
+                        1,
+                        "2025 - 2026",
+                        true)));
         when(service.getPeriods(INSTITUTION_ID, TEACHER_ID)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/academic-periods")
@@ -48,11 +56,13 @@ class AcademicPeriodControllerTest {
                 .andExpect(jsonPath("$.institutionId").value(INSTITUTION_ID.toString()))
                 .andExpect(jsonPath("$.teacherUserId").value(TEACHER_ID.toString()))
                 .andExpect(jsonPath("$.periods[0].id").value(PERIOD_ID.toString()))
+                .andExpect(jsonPath("$.periods[0].academicYearId").value(ACADEMIC_YEAR_ID.toString()))
+                .andExpect(jsonPath("$.periods[0].externalId").value("period-external-id"))
                 .andExpect(jsonPath("$.periods[0].name").value("Primer trimestre"))
                 .andExpect(jsonPath("$.periods[0].abbreviation").value("T1"))
                 .andExpect(jsonPath("$.periods[0].order").value(1))
+                .andExpect(jsonPath("$.periods[0].academicYear").value("2025 - 2026"))
                 .andExpect(jsonPath("$.periods[0].synchronized").value(true))
-                .andExpect(jsonPath("$.periods[0].externalId").doesNotExist())
                 .andExpect(jsonPath("$.periods[0].platformCode").doesNotExist());
 
         verify(service).getPeriods(INSTITUTION_ID, TEACHER_ID);

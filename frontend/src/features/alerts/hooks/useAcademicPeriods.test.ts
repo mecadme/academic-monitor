@@ -20,6 +20,8 @@ const catalog: AcademicPeriodCatalog = {
   periods: [
     {
       id: 'period-t1-internal',
+      academicYearId: 'year-1',
+      externalId: 'period-t1-external',
       name: 'Primer trimestre',
       abbreviation: 'T1',
       order: 1,

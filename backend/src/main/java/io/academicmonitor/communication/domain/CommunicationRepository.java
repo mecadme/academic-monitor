@@ -10,4 +10,8 @@ public interface CommunicationRepository {
     Optional<Communication> findById(UUID id);
 
     List<Communication> findByAlertId(UUID alertId);
+
+    List<Communication> findByAlertIdIn(java.util.Collection<UUID> alertIds);
+
+    List<Communication> findByInstitutionIdAndTeacherUserId(UUID institutionId, UUID teacherUserId);
 }

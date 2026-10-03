@@ -19,7 +19,10 @@ public class AcademicDashboardController {
     }
 
     @GetMapping
-    public AcademicDashboardResponse dashboard(@RequestParam UUID institutionId, @RequestParam UUID teacherUserId) {
-        return dashboardQueryService.getDashboard(institutionId, teacherUserId);
+    public AcademicDashboardResponse dashboard(
+            @RequestParam UUID institutionId,
+            @RequestParam UUID teacherUserId,
+            @RequestParam(required = false) UUID academicPeriodId) {
+        return dashboardQueryService.getDashboard(institutionId, teacherUserId, academicPeriodId);
     }
 }

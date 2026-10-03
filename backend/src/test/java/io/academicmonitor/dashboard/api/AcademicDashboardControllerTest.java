@@ -1,6 +1,7 @@
 package io.academicmonitor.dashboard.api;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,7 +41,7 @@ class AcademicDashboardControllerTest {
                 List.of(new AcademicDashboardResponse.CourseSummary(
                         COURSE_ID, "1.º BGU A", "Física", "2025 - 2026", 32, 24, 18, 11, 7)));
 
-        when(service.getDashboard(INSTITUTION_ID, TEACHER_USER_ID)).thenReturn(response);
+        when(service.getDashboard(INSTITUTION_ID, TEACHER_USER_ID, null)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/dashboard")
                         .queryParam("institutionId", INSTITUTION_ID.toString())
@@ -68,5 +69,24 @@ class AcademicDashboardControllerTest {
     void requiresTeacherUserId() throws Exception {
         mockMvc.perform(get("/api/v1/dashboard").queryParam("institutionId", INSTITUTION_ID.toString()))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void forwardsTheOptionalAcademicPeriodFilter() throws Exception {
+        UUID periodId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+        AcademicDashboardResponse response = new AcademicDashboardResponse(
+                INSTITUTION_ID,
+                TEACHER_USER_ID,
+                new AcademicDashboardResponse.DashboardSummary(0, 0, 0, 0, 0, 0),
+                List.of());
+        when(service.getDashboard(INSTITUTION_ID, TEACHER_USER_ID, periodId)).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/dashboard")
+                        .queryParam("institutionId", INSTITUTION_ID.toString())
+                        .queryParam("teacherUserId", TEACHER_USER_ID.toString())
+                        .queryParam("academicPeriodId", periodId.toString()))
+                .andExpect(status().isOk());
+
+        verify(service).getDashboard(INSTITUTION_ID, TEACHER_USER_ID, periodId);
     }
 }

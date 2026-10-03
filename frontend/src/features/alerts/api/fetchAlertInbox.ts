@@ -32,6 +32,10 @@ export type AlertInboxItem = {
     id: string;
     name: string;
   };
+  communication: {
+    id: string;
+    status: 'DRAFT' | 'PENDING' | 'SENT' | 'FAILED';
+  } | null;
 };
 
 export type FetchAlertInboxInput = {

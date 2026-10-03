@@ -7,4 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 interface CommunicationDataRepository extends JpaRepository<Communication, UUID> {
     List<Communication> findByAlertId(UUID alertId);
+
+    List<Communication> findByAlertIdIn(java.util.Collection<UUID> alertIds);
+
+    List<Communication> findByInstitutionIdAndTeacherUserId(UUID institutionId, UUID teacherUserId);
 }

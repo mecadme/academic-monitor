@@ -7,7 +7,38 @@ export type Communication = {
   content: string;
   createdAt: string;
   sentAt: string | null;
+  studentName: string | null;
+  courseName: string | null;
+  courseSubject: string | null;
+  activityName: string | null;
+  score: number | null;
+  maximumScore: number | null;
+  alertSeverity: 'CRITICAL' | 'WARNING' | null;
 };
+
+export async function fetchCommunications(
+  scope: Scope,
+  status?: Communication['status'],
+): Promise<Communication[]> {
+  const query = new URLSearchParams(scope);
+  if (status) query.set('status', status);
+  const response = await fetch(`${apiBaseUrl}/api/v1/communications?${query.toString()}`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) throw new Error('No se pudieron cargar las comunicaciones.');
+  return response.json() as Promise<Communication[]>;
+}
+
+export async function fetchCommunication(
+  communicationId: string,
+  scope: Scope,
+): Promise<Communication> {
+  return request(
+    `/api/v1/communications/${encodeURIComponent(communicationId)}`,
+    scope,
+    { method: 'GET' },
+  );
+}
 
 type Scope = {
   institutionId: string;
