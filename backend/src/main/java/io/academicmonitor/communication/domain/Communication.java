@@ -6,11 +6,13 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.Generated;
+import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "communications")
@@ -33,25 +35,35 @@ public class Communication {
     @Column(name = "guardian_id", nullable = false, updatable = false)
     private UUID guardianId;
 
+    @Column(name = "alert_id", updatable = false)
+    private UUID alertId;
+
     @Column(nullable = false, length = 64, updatable = false)
     private String channel;
 
     @Column(nullable = false, length = 64, updatable = false)
     private String provider;
 
-    @Column(nullable = false, length = 200, updatable = false)
+    @Column(nullable = false, length = 200)
     private String subject;
 
-    @Column(nullable = false, columnDefinition = "TEXT", updatable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private CommunicationStatus status;
 
+    @Version
+    private long version;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
     @Column(name = "sent_at")
     private Instant sentAt;
@@ -81,6 +93,44 @@ public class Communication {
         this.provider = requireText(provider, "provider");
         this.subject = requireText(subject, "subject");
         this.content = requireText(content, "content");
+        status = CommunicationStatus.PENDING;
+    }
+
+    public static Communication draft(
+            UUID institutionId,
+            UUID teacherUserId,
+            UUID studentId,
+            UUID guardianId,
+            UUID alertId,
+            String provider,
+            String subject,
+            String content) {
+        Communication communication = new Communication(
+                institutionId,
+                teacherUserId,
+                studentId,
+                guardianId,
+                "PLATFORM_NOTIFICATION",
+                provider,
+                subject,
+                content);
+        communication.alertId = requireId(alertId, "alertId");
+        communication.status = CommunicationStatus.DRAFT;
+        return communication;
+    }
+
+    public void editDraft(String subject, String content) {
+        if (status != CommunicationStatus.DRAFT) {
+            throw new IllegalStateException("Only draft communications can be edited");
+        }
+        this.subject = requireText(subject, "subject");
+        this.content = requireText(content, "content");
+    }
+
+    public void beginSending() {
+        if (status != CommunicationStatus.DRAFT) {
+            throw new IllegalStateException("Only draft communications can be sent");
+        }
         status = CommunicationStatus.PENDING;
     }
 
@@ -123,12 +173,28 @@ public class Communication {
         return guardianId;
     }
 
+    public UUID getAlertId() {
+        return alertId;
+    }
+
     public String getSubject() {
         return subject;
     }
 
     public String getContent() {
         return content;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public Instant getSentAt() {
+        return sentAt;
     }
 
     private void ensurePending() {

@@ -11,6 +11,13 @@ import {
   formatAlertDueDate,
   formatAlertScore,
 } from '../lib/formatAlert';
+import {
+  type Communication,
+  prepareAlertCommunication,
+  saveCommunicationDraft,
+  sendCommunication,
+} from '../api/communications';
+import { useState } from 'react';
 
 type AlertInboxPanelProps = {
   courses: AcademicDashboardCourse[];
@@ -30,6 +37,8 @@ type AlertInboxPanelProps = {
   onRetryAction: () => void | Promise<void>;
   onAcknowledge: (alertId: string) => void | Promise<void>;
   onMarkPending: (alertId: string) => void | Promise<void>;
+  institutionId?: string | null;
+  teacherUserId?: string | null;
 };
 
 const attentionOptions: Array<{
@@ -59,9 +68,64 @@ export function AlertInboxPanel({
   onRetryAction,
   onAcknowledge,
   onMarkPending,
+  institutionId = null,
+  teacherUserId = null,
 }: AlertInboxPanelProps) {
   const alerts = inbox?.alerts ?? [];
   const total = inbox?.total ?? 0;
+  const [communication, setCommunication] = useState<Communication | null>(null);
+  const [subject, setSubject] = useState('');
+  const [content, setContent] = useState('');
+  const [communicationError, setCommunicationError] = useState<string | null>(null);
+  const [preparingAlertId, setPreparingAlertId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [confirmingSend, setConfirmingSend] = useState(false);
+  const communicationScope = institutionId && teacherUserId ? { institutionId, teacherUserId } : null;
+
+  const prepareCommunication = async (alertId: string) => {
+    if (!communicationScope || preparingAlertId) return;
+    setPreparingAlertId(alertId);
+    setCommunicationError(null);
+    try {
+      const draft = await prepareAlertCommunication(alertId, communicationScope);
+      setCommunication(draft);
+      setSubject(draft.subject);
+      setContent(draft.content);
+      setConfirmingSend(false);
+    } catch (error) {
+      setCommunicationError(error instanceof Error ? error.message : 'No se pudo preparar el borrador.');
+    } finally {
+      setPreparingAlertId(null);
+    }
+  };
+
+  const saveDraft = async () => {
+    if (!communication || !communicationScope || saving) return;
+    setSaving(true);
+    setCommunicationError(null);
+    try {
+      setCommunication(await saveCommunicationDraft(communication.id, communicationScope, subject, content));
+    } catch (error) {
+      setCommunicationError(error instanceof Error ? error.message : 'No se pudo guardar el borrador.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmSend = async () => {
+    if (!communication || !communicationScope || sending) return;
+    setSending(true);
+    setCommunicationError(null);
+    try {
+      setCommunication(await sendCommunication(communication.id, communicationScope));
+      setConfirmingSend(false);
+    } catch (error) {
+      setCommunicationError(error instanceof Error ? error.message : 'No se pudo enviar la comunicación.');
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <section className="container panel alert-inbox-panel">
@@ -198,9 +262,52 @@ export function AlertInboxPanel({
               actionPending={actionAlertIds.has(alert.id)}
               onAcknowledge={onAcknowledge}
               onMarkPending={onMarkPending}
+              canPrepareCommunication={communicationScope !== null}
+              preparingCommunication={preparingAlertId === alert.id}
+              onPrepareCommunication={prepareCommunication}
             />
           ))}
         </div>
+      )}
+
+      {communication && (
+        <section className="alert-communication-editor" role="dialog" aria-label="Comunicación al representante">
+          <h4>Comunicación al representante</h4>
+          {communicationError && <p role="alert">{communicationError}</p>}
+          {communication.status === 'SENT' ? (
+            <p role="status">Enviado{communication.sentAt ? ` el ${new Intl.DateTimeFormat('es-EC', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(communication.sentAt))}` : ''}.</p>
+          ) : (
+            <>
+              <label>
+                Asunto
+                <input value={subject} maxLength={200} onChange={(event) => setSubject(event.target.value)} disabled={sending} />
+              </label>
+              <label>
+                Contenido
+                <textarea value={content} maxLength={20000} onChange={(event) => setContent(event.target.value)} disabled={sending} rows={10} />
+              </label>
+              <div className="alert-communication-actions">
+                <button className="btn btn-secondary" type="button" onClick={() => void saveDraft()} disabled={saving || sending}>
+                  {saving ? 'Guardando…' : 'Guardar borrador'}
+                </button>
+                {!confirmingSend ? (
+                  <button className="btn btn-primary" type="button" onClick={() => setConfirmingSend(true)} disabled={saving || sending}>
+                    Enviar por Idukay
+                  </button>
+                ) : (
+                  <div>
+                    <p>Esta comunicación será enviada al representante oficial mediante Idukay.</p>
+                    <button className="btn btn-primary" type="button" onClick={() => void confirmSend()} disabled={sending}>
+                      {sending ? 'Enviando…' : 'Confirmar envío'}
+                    </button>
+                    <button className="btn btn-secondary" type="button" onClick={() => setConfirmingSend(false)} disabled={sending}>Cancelar</button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          <button className="btn btn-secondary" type="button" onClick={() => setCommunication(null)} disabled={sending}>Cerrar</button>
+        </section>
       )}
     </section>
   );
@@ -250,11 +357,17 @@ function AlertRow({
   actionPending,
   onAcknowledge,
   onMarkPending,
+  canPrepareCommunication,
+  preparingCommunication,
+  onPrepareCommunication,
 }: {
   alert: AlertInboxItem;
   actionPending: boolean;
   onAcknowledge: (alertId: string) => void | Promise<void>;
   onMarkPending: (alertId: string) => void | Promise<void>;
+  canPrepareCommunication: boolean;
+  preparingCommunication: boolean;
+  onPrepareCommunication: (alertId: string) => void | Promise<void>;
 }) {
   const score = formatAlertScore(alert.score);
   const maximumScore = formatAlertScore(alert.activity.maximumScore);
@@ -332,6 +445,11 @@ function AlertRow({
               ? 'Marcar como pendiente'
               : 'Marcar como atendida'}
         </button>
+        {canPrepareCommunication && (
+          <button className="btn btn-secondary alert-triage-button" type="button" disabled={actionPending || preparingCommunication} onClick={() => void onPrepareCommunication(alert.id)}>
+            {preparingCommunication ? 'Preparando…' : 'Preparar comunicación'}
+          </button>
+        )}
       </div>
     </article>
   );

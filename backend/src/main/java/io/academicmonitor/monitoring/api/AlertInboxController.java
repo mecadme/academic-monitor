@@ -1,10 +1,13 @@
 package io.academicmonitor.monitoring.api;
 
+import io.academicmonitor.communication.application.AlertCommunicationService;
+import io.academicmonitor.communication.application.CommunicationResponse;
 import io.academicmonitor.monitoring.application.AlertAttentionState;
 import io.academicmonitor.monitoring.application.AlertInboxQueryService;
 import io.academicmonitor.monitoring.application.AlertInboxResponse;
 import io.academicmonitor.monitoring.application.AlertTriageService;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,10 +23,21 @@ public class AlertInboxController {
 
     private final AlertInboxQueryService alertInboxQueryService;
     private final AlertTriageService alertTriageService;
+    private final AlertCommunicationService alertCommunicationService;
 
-    public AlertInboxController(AlertInboxQueryService alertInboxQueryService, AlertTriageService alertTriageService) {
+    @Autowired
+    public AlertInboxController(
+            AlertInboxQueryService alertInboxQueryService,
+            AlertTriageService alertTriageService,
+            AlertCommunicationService alertCommunicationService) {
         this.alertInboxQueryService = alertInboxQueryService;
         this.alertTriageService = alertTriageService;
+        this.alertCommunicationService = alertCommunicationService;
+    }
+
+    /** Retained for isolated inbox-controller tests that do not exercise communications. */
+    public AlertInboxController(AlertInboxQueryService alertInboxQueryService, AlertTriageService alertTriageService) {
+        this(alertInboxQueryService, alertTriageService, null);
     }
 
     @GetMapping
@@ -49,5 +63,15 @@ public class AlertInboxController {
     public void markPending(
             @PathVariable UUID alertId, @RequestParam UUID institutionId, @RequestParam UUID teacherUserId) {
         alertTriageService.markPending(institutionId, teacherUserId, alertId);
+    }
+
+    @PostMapping("/{alertId}/communication")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CommunicationResponse prepareCommunication(
+            @PathVariable UUID alertId, @RequestParam UUID institutionId, @RequestParam UUID teacherUserId) {
+        if (alertCommunicationService == null) {
+            throw new IllegalStateException("Communication workflow is unavailable");
+        }
+        return alertCommunicationService.prepare(institutionId, teacherUserId, alertId);
     }
 }
