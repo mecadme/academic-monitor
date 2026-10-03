@@ -311,6 +311,8 @@ function App() {
         onRetryAction={alertInbox.retryAction}
         onAcknowledge={alertInbox.acknowledge}
         onMarkPending={alertInbox.markPending}
+        institutionId={context.institutionId}
+        teacherUserId={context.teacherUserId}
       />
 
       <IdukayIntegrationCard

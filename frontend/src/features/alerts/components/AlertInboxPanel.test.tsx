@@ -1,6 +1,7 @@
 import {
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -422,6 +423,69 @@ describe('AlertInboxPanel', () => {
     ).toBeEnabled();
   });
 
+  it('prepares a draft without sending, then requires explicit confirmation before delivery', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'communication-id',
+          alertId: 'alert-critical-id',
+          studentId: 'student-id',
+          status: 'DRAFT',
+          subject: 'Seguimiento académico - Física',
+          content: '<p>Borrador</p>',
+          createdAt: '2026-10-02T18:00:00Z',
+          sentAt: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'communication-id',
+          alertId: 'alert-critical-id',
+          studentId: 'student-id',
+          status: 'SENT',
+          subject: 'Seguimiento académico - Física',
+          content: '<p>Borrador</p>',
+          createdAt: '2026-10-02T18:00:00Z',
+          sentAt: '2026-10-02T18:01:00Z',
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPanel({
+      institutionId: 'institution-id',
+      teacherUserId: 'teacher-id',
+    });
+
+    await user.click(
+      within(screen.getAllByRole('article')[0]).getByRole('button', {
+        name: 'Preparar comunicación',
+      }),
+    );
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByLabelText('Asunto')).toHaveValue(
+      'Seguimiento académico - Física',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Enviar por Idukay' }),
+    );
+    expect(
+      screen.getByText(
+        'Esta comunicación será enviada al representante oficial mediante Idukay.',
+      ),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Confirmar envío' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/^Enviado/)).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
   it('keeps rows visible when an action fails and provides a local retry', async () => {
     const user = userEvent.setup();
     const onRetryAction = vi.fn();
@@ -472,4 +536,11 @@ function renderPanel(
       {...overrides}
     />,
   );
+}
+
+function jsonResponse(body: unknown) {
+  return {
+    ok: true,
+    json: async () => body,
+  } as Response;
 }
