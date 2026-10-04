@@ -1,13 +1,14 @@
 import './App.css';
 
 import { ChevronRight } from 'lucide-react';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { type AlertAttentionState } from './features/alerts/api/fetchAlertInbox';
-import { fetchCommunication, fetchCommunications, saveCommunicationDraft, sendCommunication, type Communication } from './features/alerts/api/communications';
+import { communicationsRefreshEvent, deleteCommunicationDraft, fetchCommunication, fetchCommunications, saveCommunicationDraft, sendCommunication, type Communication } from './features/alerts/api/communications';
 import { AlertInboxPanel } from './features/alerts/components/AlertInboxPanel';
 import { useAlertInbox } from './features/alerts/hooks/useAlertInbox';
 import type { AcademicPeriod } from './features/alerts/api/fetchAcademicPeriods';
+import { DeleteDraftConfirmation } from './components/ConfirmationDialog';
 import { AppShell } from './components/layout/AppShell';
 import { AcademicPeriodProvider, useAcademicPeriod } from './features/context/AcademicPeriodProvider';
 import { useAcademicContext } from './features/context/hooks/useAcademicContext';
@@ -82,7 +83,79 @@ function CourseAlerts({ course, onNavigate = () => undefined, ...scope }: Scope 
 type InboxProps = Scope & { inbox: ReturnType<typeof useAlertInbox>; courseId: string | null; attention: AlertAttentionState; onCourseChange: (value: string | null) => void; onAttentionChange: (value: AlertAttentionState) => void; onNavigate: (path: string) => void; hideCourse?: boolean; };
 function Inbox({ inbox, courseId, attention, onCourseChange, onAttentionChange, onNavigate, hideCourse, ...scope }: InboxProps) { return <AlertInboxPanel courses={scope.courses} periods={scope.periods} inbox={inbox.inbox} loading={inbox.loading} error={inbox.error} actionError={inbox.actionError} actionAlertIds={inbox.actionAlertIds} selectedCourseId={courseId} selectedAcademicPeriodId={scope.selectedPeriodId} attentionState={attention} onCourseChange={onCourseChange} onAcademicPeriodChange={() => undefined} onAttentionStateChange={onAttentionChange} onRetry={inbox.refresh} onRetryAction={inbox.retryAction} onAcknowledge={inbox.acknowledge} onMarkPending={inbox.markPending} institutionId={scope.institutionId} teacherUserId={scope.teacherUserId} showCourseFilter={!hideCourse} showPeriodFilter={false} onCommunicationNavigate={(communicationId) => onNavigate(`/communications/${communicationId}`)} />; }
 
-function CommunicationsPage({ institutionId, teacherUserId, onNavigate }: Pick<Scope, 'institutionId' | 'teacherUserId'> & { onNavigate: (path: string) => void }) { const [status, setStatus] = useState<Communication['status']>('DRAFT'); const [items, setItems] = useState<Communication[] | null>(null); const [error, setError] = useState<string | null>(null); const load = useCallback(async () => { setItems(null); setError(null); try { setItems(await fetchCommunications({ institutionId, teacherUserId }, status)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudieron cargar las comunicaciones.'); } }, [institutionId, status, teacherUserId]); useEffect(() => { void load(); }, [load]); return <section className="page"><PageTitle title="Comunicaciones" subtitle="Seguimiento de mensajes a representantes" /><div className="tabs" role="tablist">{([['DRAFT', 'Borradores'], ['SENT', 'Enviadas'], ['FAILED', 'Fallidas']] as Array<[Communication['status'], string]>).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={status === id} className={status === id ? 'is-active' : ''} onClick={() => setStatus(id)}>{label}</button>)}</div>{error ? <PageError message={error} onRetry={load} /> : items === null ? <PageSkeleton /> : items.length === 0 ? <EmptyState title="No hay comunicaciones en esta sección" message="Las comunicaciones preparadas desde una alerta aparecerán aquí." /> : <div className="communication-list">{items.map((item) => <article key={item.id} className="communication-card"><span className={`status-pill status-${item.status.toLowerCase()}`}>{statusLabel(item.status)}</span><h2>{item.subject}</h2>{(item.studentName || item.courseName || item.activityName) && <p className="communication-context">{[item.studentName, item.courseSubject ?? item.courseName, item.activityName].filter(Boolean).join(' · ')}</p>}<p>{item.status === 'SENT' && item.sentAt ? `Enviado ${formatDate(item.sentAt)}` : `Creado ${formatDate(item.createdAt)}`}</p>{item.status === 'FAILED' && <p className="muted">No se pudo enviar. Revisa la comunicación antes de intentarlo nuevamente.</p>}{item.status !== 'PENDING' && <button className="btn btn-secondary" type="button" onClick={() => onNavigate(`/communications/${item.id}`)}>{item.status === 'DRAFT' ? 'Continuar borrador' : item.status === 'FAILED' ? 'Revisar comunicación' : 'Ver comunicación'}</button>}</article>)}</div>}</section>; }
+function CommunicationsPage({ institutionId, teacherUserId, onNavigate }: Pick<Scope, 'institutionId' | 'teacherUserId'> & { onNavigate: (path: string) => void }) {
+  const [status, setStatus] = useState<Communication['status']>('DRAFT');
+  const [items, setItems] = useState<Communication[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmingDraft, setConfirmingDraft] = useState<Communication | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const deleteInFlight = useRef(false);
+  const requestSequence = useRef(0);
+
+  const load = useCallback(async (preserveItems = false) => {
+    const requestId = ++requestSequence.current;
+    if (!preserveItems) setItems(null);
+    setError(null);
+    try {
+      const next = await fetchCommunications({ institutionId, teacherUserId }, status);
+      if (requestId === requestSequence.current) setItems(next);
+    } catch (err) {
+      if (requestId === requestSequence.current) setError(err instanceof Error ? err.message : 'No se pudieron cargar las comunicaciones.');
+    }
+  }, [institutionId, status, teacherUserId]);
+
+  useEffect(() => {
+    void load();
+    const reload = () => { void load(true); };
+    window.addEventListener(communicationsRefreshEvent, reload);
+    return () => {
+      window.removeEventListener(communicationsRefreshEvent, reload);
+      requestSequence.current++;
+    };
+  }, [load]);
+
+  const removeDraft = async () => {
+    if (!confirmingDraft || confirmingDraft.status !== 'DRAFT' || deleteInFlight.current) return;
+    const id = confirmingDraft.id;
+    deleteInFlight.current = true;
+    setDeletingId(id);
+    setDeleteError(null);
+    try {
+      await deleteCommunicationDraft(id);
+      setItems((current) => current?.filter((item) => item.id !== id) ?? null);
+      setConfirmingDraft(null);
+      setFeedback('Borrador eliminado.');
+    } catch {
+      setDeleteError('No se pudo eliminar el borrador. Inténtalo nuevamente.');
+    } finally {
+      deleteInFlight.current = false;
+      setDeletingId(null);
+    }
+  };
+
+  return <section className="page">
+    <div inert={confirmingDraft !== null}>
+      <PageTitle title="Comunicaciones" subtitle="Seguimiento de mensajes a representantes" />
+      <div className="tabs" role="tablist">{([['DRAFT', 'Borradores'], ['SENT', 'Enviadas'], ['FAILED', 'Fallidas']] as Array<[Communication['status'], string]>).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={status === id} className={status === id ? 'is-active' : ''} onClick={() => setStatus(id)}>{label}</button>)}</div>
+      {feedback && <p className="refresh-copy" role="status">{feedback}</p>}
+      {error && <PageError message={error} onRetry={load} />}
+      {items === null ? !error && <PageSkeleton /> : items.length === 0 ? <EmptyState title="No hay comunicaciones en esta sección" message="Las comunicaciones preparadas desde una alerta aparecerán aquí." /> : <div className="communication-list">{items.map((item) => <article key={item.id} className="communication-card">
+        <span className={`status-pill status-${item.status.toLowerCase()}`}>{statusLabel(item.status)}</span>
+        <h2>{item.subject}</h2>
+        {(item.studentName || item.courseName || item.activityName) && <p className="communication-context">{[item.studentName, item.courseSubject ?? item.courseName, item.activityName].filter(Boolean).join(' · ')}</p>}
+        <p>{item.status === 'SENT' && item.sentAt ? `Enviado ${formatDate(item.sentAt)}` : `Creado ${formatDate(item.createdAt)}`}</p>
+        {item.status === 'FAILED' && <p className="muted">No se pudo enviar. Revisa la comunicación antes de intentarlo nuevamente.</p>}
+        <div className="communication-card-actions">
+          {item.status !== 'PENDING' && <button className="btn btn-secondary" type="button" disabled={deletingId === item.id} onClick={() => onNavigate(`/communications/${item.id}`)}>{item.status === 'DRAFT' ? 'Continuar borrador' : item.status === 'FAILED' ? 'Revisar comunicación' : 'Ver comunicación'}</button>}
+          {item.status === 'DRAFT' && <button className="btn btn-danger-secondary" type="button" disabled={deletingId === item.id} onClick={() => { setDeleteError(null); setFeedback(null); setConfirmingDraft(item); }}>{deletingId === item.id ? 'Eliminando…' : 'Eliminar borrador'}</button>}
+        </div>
+      </article>)}</div>}
+    </div>
+    {confirmingDraft && <DeleteDraftConfirmation busy={deletingId !== null} error={deleteError} onCancel={() => setConfirmingDraft(null)} onConfirm={() => void removeDraft()} />}
+  </section>;
+}
 
 function CommunicationDetailPage({ institutionId, teacherUserId, communicationId, onNavigate }: Pick<Scope, 'institutionId' | 'teacherUserId'> & { communicationId: string; onNavigate: (path: string) => void }) {
   const scope = { institutionId, teacherUserId };
@@ -92,14 +165,18 @@ function CommunicationDetailPage({ institutionId, teacherUserId, communicationId
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingSend, setConfirmingSend] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const busy = saving || deleting;
   const load = useCallback(async () => { setCommunication(null); setError(null); try { const next = await fetchCommunication(communicationId, scope); setCommunication(next); setSubject(next.subject); setContent(htmlToEditableText(next.content)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo cargar la comunicación.'); } }, [communicationId, institutionId, teacherUserId]);
   useEffect(() => { void load(); }, [load]);
-  const save = async () => { if (!communication || communication.status !== 'DRAFT' || saving) return; setSaving(true); setError(null); try { const next = await saveCommunicationDraft(communication.id, scope, subject, editableTextToHtml(content)); setCommunication(next); setSubject(next.subject); setContent(htmlToEditableText(next.content)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo guardar el borrador.'); } finally { setSaving(false); } };
-  const send = async () => { if (!communication || communication.status !== 'DRAFT' || saving) return; setSaving(true); setError(null); try { const next = await sendCommunication(communication.id, scope); setCommunication(next); setConfirmingSend(false); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo enviar la comunicación.'); } finally { setSaving(false); } };
+  const save = async () => { if (!communication || communication.status !== 'DRAFT' || busy) return; setSaving(true); setError(null); try { const next = await saveCommunicationDraft(communication.id, scope, subject, editableTextToHtml(content)); setCommunication(next); setSubject(next.subject); setContent(htmlToEditableText(next.content)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo guardar el borrador.'); } finally { setSaving(false); } };
+  const send = async () => { if (!communication || communication.status !== 'DRAFT' || busy) return; setSaving(true); setError(null); try { const next = await sendCommunication(communication.id, scope); setCommunication(next); setConfirmingSend(false); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo enviar la comunicación.'); } finally { setSaving(false); } };
+  const removeDraft = async () => { if (!communication || communication.status !== 'DRAFT' || busy) return; setDeleting(true); setError(null); try { await deleteCommunicationDraft(communication.id); setCommunication(null); setConfirmingDelete(false); onNavigate('/alerts'); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo eliminar el borrador.'); } finally { setDeleting(false); } };
   if (error && !communication) return <section className="page"><button className="back-link" type="button" onClick={() => onNavigate('/communications')}>← Comunicaciones</button><PageError message={error} onRetry={load} /></section>;
   if (!communication) return <PageSkeleton />;
   const editable = communication.status === 'DRAFT';
-  return <section className="page communication-detail"><button className="back-link" type="button" onClick={() => onNavigate('/alerts')}>← Volver a Alertas</button><header className="communication-detail-heading"><div><h1>Comunicación al representante</h1><p>Revisa el contexto académico y redacta el mensaje para el representante oficial.</p></div><span className={`status-pill status-${communication.status.toLowerCase()}`}>{statusLabel(communication.status)}</span></header><AcademicContext communication={communication} />{error && <div className="alert-local-error" role="alert"><p>{error}</p></div>}<section className="communication-editor surface"><label htmlFor="communication-subject">Asunto<input id="communication-subject" value={subject} disabled={!editable || saving} onChange={(event) => setSubject(event.target.value)} /></label><label htmlFor="communication-content">Mensaje<textarea id="communication-content" value={content} disabled={!editable || saving} onChange={(event) => setContent(event.target.value)} rows={14} /></label>{editable ? <div className="communication-editor-actions"><button className="btn btn-secondary" type="button" disabled={saving} onClick={() => void save()}>{saving ? 'Guardando…' : 'Guardar borrador'}</button><button className="btn btn-primary" type="button" disabled={saving} onClick={() => setConfirmingSend(true)}>Enviar por Idukay</button></div> : <p className="muted">{communication.status === 'PENDING' ? 'La comunicación está en proceso de envío.' : communication.status === 'SENT' ? `Enviada${communication.sentAt ? ` el ${formatDate(communication.sentAt)}` : ''}.` : 'La comunicación no se puede editar desde su estado actual.'}</p>}</section>{confirmingSend && <section className="send-confirmation" role="dialog" aria-modal="true" aria-labelledby="send-confirmation-title"><div><h2 id="send-confirmation-title">Confirmar envío</h2><p>Esta comunicación será enviada al representante oficial mediante Idukay.</p><div className="communication-editor-actions"><button className="btn btn-secondary" type="button" disabled={saving} onClick={() => setConfirmingSend(false)}>Cancelar</button><button className="btn btn-primary" type="button" disabled={saving} onClick={() => void send()}>{saving ? 'Enviando…' : 'Enviar'}</button></div></div></section>}</section>;
+  return <section className="page communication-detail"><div inert={confirmingDelete}><button className="back-link" type="button" onClick={() => onNavigate('/alerts')}>← Volver a Alertas</button><header className="communication-detail-heading"><div><h1>Comunicación al representante</h1><p>Revisa el contexto académico y redacta el mensaje para el representante oficial.</p></div><span className={`status-pill status-${communication.status.toLowerCase()}`}>{statusLabel(communication.status)}</span></header><AcademicContext communication={communication} />{error && <div className="alert-local-error" role="alert"><p>{error}</p></div>}<section className="communication-editor surface"><label htmlFor="communication-subject">Asunto<input id="communication-subject" value={subject} disabled={!editable || busy} onChange={(event) => setSubject(event.target.value)} /></label><label htmlFor="communication-content">Mensaje<textarea id="communication-content" value={content} disabled={!editable || busy} onChange={(event) => setContent(event.target.value)} rows={14} /></label>{editable ? <div className="communication-editor-actions"><button className="btn btn-secondary" type="button" disabled={busy} onClick={() => void save()}>{saving ? 'Guardando…' : 'Guardar borrador'}</button><button className="btn btn-danger-secondary" type="button" disabled={busy} onClick={() => { setError(null); setConfirmingDelete(true); }}>Eliminar borrador</button><button className="btn btn-primary" type="button" disabled={busy} onClick={() => setConfirmingSend(true)}>Enviar por Idukay</button></div> : <p className="muted">{communication.status === 'PENDING' ? 'La comunicación está en proceso de envío.' : communication.status === 'SENT' ? `Enviada${communication.sentAt ? ` el ${formatDate(communication.sentAt)}` : ''}.` : 'La comunicación no se puede editar desde su estado actual.'}</p>}</section>{confirmingSend && <section className="send-confirmation" role="dialog" aria-modal="true" aria-labelledby="send-confirmation-title"><div><h2 id="send-confirmation-title">Confirmar envío</h2><p>Esta comunicación será enviada al representante oficial mediante Idukay.</p><div className="communication-editor-actions"><button className="btn btn-secondary" type="button" disabled={busy} onClick={() => setConfirmingSend(false)}>Cancelar</button><button className="btn btn-primary" type="button" disabled={busy} onClick={() => void send()}>{saving ? 'Enviando…' : 'Enviar'}</button></div></div></section>}</div>{confirmingDelete && <DeleteDraftConfirmation busy={deleting} error={error} onCancel={() => setConfirmingDelete(false)} onConfirm={() => void removeDraft()} />}</section>;
 }
 
 function AcademicContext({ communication }: { communication: Communication }) { return <section className="academic-context surface" aria-label="Contexto académico"><div><p className="context-label">Estudiante</p><h2>{communication.studentName ?? 'Estudiante sin nombre disponible'}</h2></div>{(communication.courseName || communication.courseSubject) && <div><p className="context-label">Curso · asignatura</p><p>{[communication.courseSubject, communication.courseName].filter(Boolean).join(' · ')}</p></div>}{communication.activityName && <div><p className="context-label">Actividad</p><p>{communication.activityName}</p></div>}{communication.score !== null && communication.maximumScore !== null && <div><p className="context-label">Calificación</p><strong>{formatScore(communication.score)} / {formatScore(communication.maximumScore)}</strong></div>}{communication.alertSeverity && <div><p className="context-label">Severidad</p><span className={`severity-context severity-${communication.alertSeverity.toLowerCase()}`}>{communication.alertSeverity === 'CRITICAL' ? 'Crítica' : 'Advertencia'}</span></div>}</section>; }

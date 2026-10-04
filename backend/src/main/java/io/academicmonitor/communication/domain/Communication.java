@@ -134,6 +134,10 @@ public class Communication {
         status = CommunicationStatus.PENDING;
     }
 
+    public boolean isDeletable() {
+        return status == CommunicationStatus.DRAFT;
+    }
+
     public void markSent(Instant sentAt) {
         ensurePending();
         status = CommunicationStatus.SENT;

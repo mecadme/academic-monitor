@@ -13,18 +13,18 @@ public class TemplateMessageGenerator {
         String effectiveActivity = nonBlank(activityName, "Actividad académica");
         String subject = "Seguimiento académico - " + effectiveSubject;
         String content = "<p>Estimado/a representante:</p>"
-                + "<p>Le informamos que se ha registrado una situación académica que requiere seguimiento.</p>"
-                + "<p>Asignatura: "
+                + "<p>En la asignatura de "
                 + escape(effectiveSubject)
-                + "<br>Actividad: "
-                + escape(effectiveActivity)
-                + "<br>Calificación: "
-                + score.toPlainString()
+                + ", el/la estudiante obtuvo una calificación de "
+                + formatScore(score)
                 + "/"
-                + baseScore.toPlainString()
-                + "</p>"
-                + "<p>Solicitamos acompañar al estudiante en el proceso de mejora correspondiente.</p>"
-                + "<p>Atentamente,<br>Docente</p>";
+                + formatScore(baseScore)
+                + " en la actividad «"
+                + escape(effectiveActivity)
+                + "». Este resultado requiere seguimiento y acompañamiento académico.</p>"
+                + "<p>Se recomienda revisar los contenidos trabajados y apoyar el proceso de refuerzo para "
+                + "favorecer una mejora en próximas actividades.</p>"
+                + "<p>Agradecemos su atención y acompañamiento en el proceso académico.</p>";
         return new GeneratedMessage(subject, content);
     }
 
@@ -39,6 +39,12 @@ public class TemplateMessageGenerator {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&#39;");
+    }
+
+    private static String formatScore(BigDecimal value) {
+        BigDecimal normalized = (value == null ? BigDecimal.ZERO : value).stripTrailingZeros();
+        if (normalized.scale() < 0) normalized = normalized.setScale(0);
+        return normalized.toPlainString().replace('.', ',');
     }
 
     public record GeneratedMessage(String subject, String content) {}

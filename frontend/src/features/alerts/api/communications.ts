@@ -48,6 +48,21 @@ type Scope = {
 const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
+export const communicationsRefreshEvent = 'academic-monitor:communications-refresh';
+
+export async function deleteCommunicationDraft(communicationId: string): Promise<void> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/v1/communications/${encodeURIComponent(communicationId)}`,
+    { method: 'DELETE', headers: { Accept: 'application/json' } },
+  );
+  if (!response.ok) {
+    throw new Error(response.status === 409
+      ? 'El borrador cambió de estado y ya no se puede eliminar.'
+      : 'No se pudo eliminar el borrador.');
+  }
+  window.dispatchEvent(new Event(communicationsRefreshEvent));
+}
+
 export async function prepareAlertCommunication(
   alertId: string,
   scope: Scope,

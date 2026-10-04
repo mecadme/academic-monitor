@@ -7,6 +7,8 @@ import java.util.UUID;
 public interface CommunicationRepository {
     Communication save(Communication communication);
 
+    void delete(Communication communication);
+
     Optional<Communication> findById(UUID id);
 
     List<Communication> findByAlertId(UUID alertId);

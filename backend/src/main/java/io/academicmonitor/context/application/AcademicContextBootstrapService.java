@@ -9,6 +9,7 @@ import io.academicmonitor.institution.domain.InstitutionMembershipRepository;
 import io.academicmonitor.institution.domain.InstitutionRepository;
 import io.academicmonitor.institution.domain.InstitutionRole;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,6 +63,27 @@ public class AcademicContextBootstrapService {
                 new InstitutionMembership(user.getId(), institution.getId(), InstitutionRole.TEACHER));
 
         return new AcademicContextResult(institution.getId(), user.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<AcademicContextResult> currentTeacherContext() {
+        // Resolve the same server-configured user as bootstrap, without creating any data.
+        return userRepository
+                .findByEmail(new User(properties.userEmail()).getEmail())
+                .flatMap(user -> {
+                    List<InstitutionMembership> activeMemberships =
+                            membershipRepository.findByUserId(user.getId()).stream()
+                                    .filter(InstitutionMembership::isActive)
+                                    .toList();
+                    if (activeMemberships.size() != 1
+                            || activeMemberships.getFirst().getInstitutionRole() != InstitutionRole.TEACHER) {
+                        return Optional.empty();
+                    }
+                    return institutionRepository
+                            .findById(activeMemberships.getFirst().getInstitutionId())
+                            .filter(Institution::isActive)
+                            .map(institution -> new AcademicContextResult(institution.getId(), user.getId()));
+                });
     }
 
     private Institution resolveInstitution(InstitutionMembership membership) {

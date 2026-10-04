@@ -20,6 +20,7 @@ class CommunicationExceptionHandler {
                             RECIPIENT_NOT_REACHABLE,
                             COMMUNICATION_ALREADY_SENT,
                             COMMUNICATION_NOT_EDITABLE,
+                            COMMUNICATION_NOT_DELETABLE,
                             COMMUNICATION_NOT_SENDABLE -> HttpStatus.CONFLICT;
                 };
         ProblemDetail problem =

@@ -93,7 +93,7 @@ class AlertCommunicationServiceTest {
 
         assertEquals(CommunicationStatus.DRAFT, response.status());
         assertEquals("Seguimiento académico - Matemática", response.subject());
-        assertEquals(true, response.content().contains("4.50/10"));
+        assertEquals(true, response.content().contains("4,5/10"));
         verify(communications).save(any(Communication.class));
         verifyNoInteractions(store);
         verify(delivery, never()).send(any());

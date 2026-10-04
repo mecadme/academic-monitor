@@ -14,6 +14,7 @@ import {
   acknowledgeAlert,
   markAlertPending,
 } from '../api/triageAlert';
+import { communicationsRefreshEvent } from '../api/communications';
 
 type UseAlertInboxInput = {
   institutionId: string | null;
@@ -129,8 +130,11 @@ export function useAlertInbox({
 
   useEffect(() => {
     void loadInbox();
+    const reload = () => { void loadInbox(); };
+    window.addEventListener(communicationsRefreshEvent, reload);
 
     return () => {
+      window.removeEventListener(communicationsRefreshEvent, reload);
       activeController.current?.abort();
     };
   }, [loadInbox]);
