@@ -156,6 +156,41 @@ class AcademicContextBootstrapServiceTest {
         assertEquals("Bootstrap user's active membership references a missing institution", exception.getMessage());
     }
 
+    @Test
+    void currentTeacherContextResolvesServerUserWithoutWrites() {
+        User teacher = user(USER_ID);
+        Institution school = institution(INSTITUTION_ID);
+        InstitutionMembership membership = membership(INSTITUTION_ID);
+        when(membership.getInstitutionRole()).thenReturn(InstitutionRole.TEACHER);
+        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.of(teacher));
+        when(membershipRepository.findByUserId(USER_ID)).thenReturn(List.of(membership));
+        when(institutionRepository.findById(INSTITUTION_ID)).thenReturn(Optional.of(school));
+
+        assertEquals(Optional.of(new AcademicContextResult(INSTITUTION_ID, USER_ID)), service.currentTeacherContext());
+        verify(userRepository, never()).save(any());
+        verify(institutionRepository, never()).save(any());
+        verify(membershipRepository, never()).save(any());
+    }
+
+    @Test
+    void currentTeacherContextDoesNotBootstrapMissingUser() {
+        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.empty());
+        assertEquals(Optional.empty(), service.currentTeacherContext());
+        verify(userRepository, never()).save(any());
+        verifyNoInteractions(institutionRepository, membershipRepository);
+    }
+
+    @Test
+    void currentTeacherContextRejectsNonTeacherMembership() {
+        User teacher = user(USER_ID);
+        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.of(teacher));
+        InstitutionMembership membership = membership(INSTITUTION_ID);
+        when(membership.getInstitutionRole()).thenReturn(InstitutionRole.ADMIN);
+        when(membershipRepository.findByUserId(USER_ID)).thenReturn(List.of(membership));
+        assertEquals(Optional.empty(), service.currentTeacherContext());
+        verifyNoInteractions(institutionRepository);
+    }
+
     private User user(UUID id) {
         User user = mock(User.class);
         when(user.getId()).thenReturn(id);

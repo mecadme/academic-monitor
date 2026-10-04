@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.academicmonitor.communication.application.AlertCommunicationService;
 import io.academicmonitor.communication.application.CommunicationResponse;
 import io.academicmonitor.communication.domain.CommunicationStatus;
+import io.academicmonitor.context.application.AcademicContextBootstrapService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +28,8 @@ class CommunicationControllerTest {
     @BeforeEach
     void setUp() {
         service = mock(AlertCommunicationService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new CommunicationController(service))
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new CommunicationController(service, mock(AcademicContextBootstrapService.class)))
                 .build();
     }
 

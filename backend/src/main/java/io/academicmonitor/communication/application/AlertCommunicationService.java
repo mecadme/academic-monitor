@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -152,6 +153,19 @@ public class AlertCommunicationService {
         }
         communication.editDraft(subject.trim(), content.trim());
         return responseFor(communicationRepository.save(communication));
+    }
+
+    @Transactional
+    public void deleteDraft(UUID institutionId, UUID teacherUserId, UUID communicationId) {
+        Communication communication = ownedCommunication(institutionId, teacherUserId, communicationId);
+        if (!communication.isDeletable()) {
+            throw error(CommunicationWorkflowError.COMMUNICATION_NOT_DELETABLE);
+        }
+        try {
+            communicationRepository.delete(communication);
+        } catch (OptimisticLockingFailureException exception) {
+            throw error(CommunicationWorkflowError.COMMUNICATION_NOT_DELETABLE);
+        }
     }
 
     public CommunicationResponse send(UUID institutionId, UUID teacherUserId, UUID communicationId) {

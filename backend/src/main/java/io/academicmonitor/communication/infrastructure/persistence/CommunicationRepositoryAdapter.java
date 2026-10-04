@@ -22,6 +22,13 @@ class CommunicationRepositoryAdapter implements CommunicationRepository {
     }
 
     @Override
+    public void delete(Communication communication) {
+        // Delete the loaded entity so Hibernate checks its existing @Version.
+        repository.delete(communication);
+        repository.flush();
+    }
+
+    @Override
     public Optional<Communication> findById(UUID id) {
         return repository.findById(id);
     }
