@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.academicmonitor.academic.application.StudentGuardianQueryService;
 import io.academicmonitor.academic.application.StudentGuardianQueryService.StudentGuardianResponse;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,8 +24,11 @@ class StudentGuardianControllerTest {
 
     @BeforeEach
     void setUp() {
+        AuthenticatedAcademicContext context = mock(AuthenticatedAcademicContext.class);
+        when(context.institutionId()).thenReturn(INSTITUTION_ID);
+        when(context.userId()).thenReturn(TEACHER_ID);
         service = mock(StudentGuardianQueryService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new StudentGuardianController(service))
+        mockMvc = MockMvcBuilders.standaloneSetup(new StudentGuardianController(service, context))
                 .build();
     }
 
@@ -48,12 +52,12 @@ class StudentGuardianControllerTest {
     }
 
     @Test
-    void requiresTeacherAndInstitutionScope() throws Exception {
+    void doesNotRequireTeacherAndInstitutionInputs() throws Exception {
         mockMvc.perform(get("/api/v1/students/{studentId}/guardians", STUDENT_ID)
                         .queryParam("institutionId", INSTITUTION_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/students/{studentId}/guardians", STUDENT_ID)
                         .queryParam("teacherUserId", TEACHER_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
     }
 }

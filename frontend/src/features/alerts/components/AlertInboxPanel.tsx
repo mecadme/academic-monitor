@@ -10,19 +10,17 @@ type Props = {
   actionError: string | null; actionAlertIds: ReadonlySet<string>; selectedCourseId: string | null; selectedAcademicPeriodId: string | null;
   attentionState: AlertAttentionState; onCourseChange: (value: string | null) => void; onAcademicPeriodChange: (value: string | null) => void;
   onAttentionStateChange: (value: AlertAttentionState) => void; onRetry: () => void | Promise<void>; onRetryAction: () => void | Promise<void>;
-  onAcknowledge: (id: string) => void | Promise<void>; onMarkPending: (id: string) => void | Promise<void>; institutionId?: string | null;
-  teacherUserId?: string | null; showCourseFilter?: boolean; showPeriodFilter?: boolean; onCommunicationNavigate?: (id: string) => void;
+  onAcknowledge: (id: string) => void | Promise<void>; onMarkPending: (id: string) => void | Promise<void>; showCourseFilter?: boolean; showPeriodFilter?: boolean; onCommunicationNavigate?: (id: string) => void;
 };
 const states: Array<[AlertAttentionState, string]> = [['PENDING', 'Pendientes'], ['ACKNOWLEDGED', 'Atendidas'], ['ALL', 'Todas activas']];
 
 export function AlertInboxPanel(props: Props) {
   const [preparing, setPreparing] = useState<string | null>(null);
   const [communicationError, setCommunicationError] = useState<string | null>(null);
-  const scope = props.institutionId && props.teacherUserId ? { institutionId: props.institutionId, teacherUserId: props.teacherUserId } : null;
   const prepare = async (alertId: string) => {
-    if (!scope || preparing) return;
+    if (preparing) return;
     setPreparing(alertId); setCommunicationError(null);
-    try { const communication = await prepareAlertCommunication(alertId, scope); props.onCommunicationNavigate?.(communication.id); }
+    try { const communication = await prepareAlertCommunication(alertId); props.onCommunicationNavigate?.(communication.id); }
     catch (error) { setCommunicationError(error instanceof Error ? error.message : 'No se pudo preparar el borrador.'); }
     finally { setPreparing(null); }
   };
@@ -39,7 +37,7 @@ export function AlertInboxPanel(props: Props) {
     {(props.error || communicationError) && <div className="alert-local-error" role="alert"><p>{props.error ?? communicationError}</p>{props.error && <button className="btn btn-secondary" type="button" onClick={() => void props.onRetry()}>Reintentar</button>}</div>}
     {props.actionError && <div className="alert-local-error" role="alert"><p>{props.actionError}</p><button className="btn btn-secondary" type="button" onClick={() => void props.onRetryAction()}>Reintentar acción</button></div>}
     {!props.loading && !props.error && props.inbox && alerts.length === 0 && <p className="alert-empty-state">{emptyCopy(props.selectedCourseId, props.selectedAcademicPeriodId, props.attentionState)}</p>}
-    {alerts.length > 0 && <div className="alert-list" aria-label="Alertas abiertas">{alerts.map((alert) => <AlertRow key={alert.id} alert={alert} actionPending={props.actionAlertIds.has(alert.id)} canCommunicate={scope !== null} preparing={preparing === alert.id} onAcknowledge={props.onAcknowledge} onMarkPending={props.onMarkPending} onPrepare={prepare} onNavigate={props.onCommunicationNavigate} />)}</div>}
+    {alerts.length > 0 && <div className="alert-list" aria-label="Alertas abiertas">{alerts.map((alert) => <AlertRow key={alert.id} alert={alert} actionPending={props.actionAlertIds.has(alert.id)} canCommunicate={!!props.onCommunicationNavigate} preparing={preparing === alert.id} onAcknowledge={props.onAcknowledge} onMarkPending={props.onMarkPending} onPrepare={prepare} onNavigate={props.onCommunicationNavigate} />)}</div>}
   </section>;
 }
 

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import io.academicmonitor.monitoring.application.AlertAttentionState;
 import io.academicmonitor.monitoring.application.AlertInboxQueryService;
 import io.academicmonitor.monitoring.application.AlertInboxResponse;
@@ -41,9 +42,12 @@ class AlertInboxControllerTest {
 
     @BeforeEach
     void setUp() {
+        AuthenticatedAcademicContext context = mock(AuthenticatedAcademicContext.class);
+        when(context.institutionId()).thenReturn(INSTITUTION_ID);
+        when(context.userId()).thenReturn(TEACHER_USER_ID);
         service = mock(AlertInboxQueryService.class);
         triageService = mock(AlertTriageService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new AlertInboxController(service, triageService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new AlertInboxController(service, triageService, null, context))
                 .build();
     }
 
@@ -156,30 +160,30 @@ class AlertInboxControllerTest {
     }
 
     @Test
-    void requiresInstitutionId() throws Exception {
+    void doesNotRequireInstitutionId() throws Exception {
         mockMvc.perform(get("/api/v1/alerts").queryParam("teacherUserId", TEACHER_USER_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void requiresTeacherUserId() throws Exception {
+    void doesNotRequireTeacherUserId() throws Exception {
         mockMvc.perform(get("/api/v1/alerts").queryParam("institutionId", INSTITUTION_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void triageEndpointsRequireInstitutionAndTeacherScope() throws Exception {
+    void triageEndpointsDeriveScopeWithoutClientIdentifiers() throws Exception {
         mockMvc.perform(post("/api/v1/alerts/{alertId}/acknowledge", ALERT_ID)
                         .queryParam("teacherUserId", TEACHER_USER_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNoContent());
         mockMvc.perform(post("/api/v1/alerts/{alertId}/acknowledge", ALERT_ID)
                         .queryParam("institutionId", INSTITUTION_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNoContent());
         mockMvc.perform(post("/api/v1/alerts/{alertId}/mark-pending", ALERT_ID)
                         .queryParam("teacherUserId", TEACHER_USER_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNoContent());
         mockMvc.perform(post("/api/v1/alerts/{alertId}/mark-pending", ALERT_ID)
                         .queryParam("institutionId", INSTITUTION_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNoContent());
     }
 }

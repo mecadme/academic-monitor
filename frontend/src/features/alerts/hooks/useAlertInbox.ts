@@ -84,8 +84,6 @@ export function useAlertInbox({
       setError(null);
 
       const result = await fetchAlertInbox({
-        institutionId,
-        teacherUserId,
         courseId,
         academicPeriodId,
         attentionState,
@@ -165,8 +163,6 @@ export function useAlertInbox({
       try {
         const input = {
           alertId,
-          institutionId,
-          teacherUserId,
         };
 
         if (action === 'ACKNOWLEDGE') {

@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../api/apiFetch';
+
 export type Communication = {
   id: string;
   alertId: string;
@@ -16,109 +18,45 @@ export type Communication = {
   alertSeverity: 'CRITICAL' | 'WARNING' | null;
 };
 
-export async function fetchCommunications(
-  scope: Scope,
-  status?: Communication['status'],
-): Promise<Communication[]> {
-  const query = new URLSearchParams(scope);
-  if (status) query.set('status', status);
-  const response = await fetch(`${apiBaseUrl}/api/v1/communications?${query.toString()}`, {
-    headers: { Accept: 'application/json' },
-  });
-  if (!response.ok) throw new Error('No se pudieron cargar las comunicaciones.');
-  return response.json() as Promise<Communication[]>;
-}
-
-export async function fetchCommunication(
-  communicationId: string,
-  scope: Scope,
-): Promise<Communication> {
-  return request(
-    `/api/v1/communications/${encodeURIComponent(communicationId)}`,
-    scope,
-    { method: 'GET' },
-  );
-}
-
-type Scope = {
-  institutionId: string;
-  teacherUserId: string;
-};
-
-const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
-
 export const communicationsRefreshEvent = 'academic-monitor:communications-refresh';
 
+export async function fetchCommunications(status?: Communication['status']): Promise<Communication[]> {
+  const query = new URLSearchParams();
+  if (status) query.set('status', status);
+  return (await apiFetch(`/api/v1/communications${query.size ? `?${query}` : ''}`, {}, {
+    errorMessage: 'No se pudieron cargar las comunicaciones.',
+  })).json();
+}
+
+export async function fetchCommunication(communicationId: string): Promise<Communication> {
+  return request(`/api/v1/communications/${encodeURIComponent(communicationId)}`, { method: 'GET' });
+}
+
 export async function deleteCommunicationDraft(communicationId: string): Promise<void> {
-  const response = await fetch(
-    `${apiBaseUrl}/api/v1/communications/${encodeURIComponent(communicationId)}`,
-    { method: 'DELETE', headers: { Accept: 'application/json' } },
-  );
-  if (!response.ok) {
-    throw new Error(response.status === 409
-      ? 'El borrador cambió de estado y ya no se puede eliminar.'
-      : 'No se pudo eliminar el borrador.');
-  }
+  await apiFetch(`/api/v1/communications/${encodeURIComponent(communicationId)}`, { method: 'DELETE' }, {
+    errorMessage: (status) => status === 409 ? 'El borrador cambió de estado y ya no se puede eliminar.' : 'No se pudo eliminar el borrador.',
+  });
   window.dispatchEvent(new Event(communicationsRefreshEvent));
 }
 
-export async function prepareAlertCommunication(
-  alertId: string,
-  scope: Scope,
-): Promise<Communication> {
-  return request(
-    `/api/v1/alerts/${encodeURIComponent(alertId)}/communication`,
-    scope,
-    { method: 'POST' },
-  );
+export async function prepareAlertCommunication(alertId: string): Promise<Communication> {
+  return request(`/api/v1/alerts/${encodeURIComponent(alertId)}/communication`, { method: 'POST' });
 }
 
-export async function saveCommunicationDraft(
-  communicationId: string,
-  scope: Scope,
-  subject: string,
-  content: string,
-): Promise<Communication> {
-  return request(
-    `/api/v1/communications/${encodeURIComponent(communicationId)}`,
-    scope,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subject, content }),
-    },
-  );
+export async function saveCommunicationDraft(communicationId: string, subject: string, content: string): Promise<Communication> {
+  return request(`/api/v1/communications/${encodeURIComponent(communicationId)}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject, content }),
+  });
 }
 
-export async function sendCommunication(
-  communicationId: string,
-  scope: Scope,
-): Promise<Communication> {
+export async function sendCommunication(communicationId: string): Promise<Communication> {
   try {
-    return await request(
-    `/api/v1/communications/${encodeURIComponent(communicationId)}/send`,
-    scope,
-    { method: 'POST' },
-    );
+    return await request(`/api/v1/communications/${encodeURIComponent(communicationId)}/send`, { method: 'POST' });
   } finally {
     window.dispatchEvent(new Event('academic-monitor:notifications-refresh'));
   }
 }
 
-async function request(
-  path: string,
-  { institutionId, teacherUserId }: Scope,
-  init: RequestInit,
-): Promise<Communication> {
-  const query = new URLSearchParams({ institutionId, teacherUserId });
-  const response = await fetch(`${apiBaseUrl}${path}?${query.toString()}`, {
-    ...init,
-    headers: { Accept: 'application/json', ...init.headers },
-  });
-
-  if (!response.ok) {
-    throw new Error('No se pudo completar la comunicación.');
-  }
-  return response.json() as Promise<Communication>;
+async function request(path: string, init: RequestInit): Promise<Communication> {
+  return (await apiFetch(path, init, { errorMessage: 'No se pudo completar la comunicación.' })).json();
 }

@@ -70,7 +70,7 @@ describe('useAcademicPeriods', () => {
       expect(result.current.catalog).toEqual(catalog);
     });
     expect(String(fetchMock.mock.calls[0][0])).toContain(
-      '/api/v1/academic-periods?institutionId=institution-1&teacherUserId=teacher-1',
+      '/api/v1/academic-periods',
     );
   });
 

@@ -10,8 +10,7 @@ import io.academicmonitor.communication.application.AlertCommunicationService;
 import io.academicmonitor.communication.application.TemplateMessageGenerator;
 import io.academicmonitor.communication.application.port.CommunicationDeliveryPort;
 import io.academicmonitor.communication.domain.*;
-import io.academicmonitor.context.application.AcademicContextBootstrapService;
-import io.academicmonitor.context.application.AcademicContextResult;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import io.academicmonitor.monitoring.domain.AlertRepository;
 import java.time.Instant;
 import java.util.*;
@@ -28,7 +27,7 @@ class DeleteCommunicationControllerTest {
     private final UUID teacherId = UUID.randomUUID();
     private final UUID communicationId = UUID.randomUUID();
     private final CommunicationRepository repository = mock(CommunicationRepository.class);
-    private final AcademicContextBootstrapService context = mock(AcademicContextBootstrapService.class);
+    private final AuthenticatedAcademicContext context = mock(AuthenticatedAcademicContext.class);
     private final CommunicationDeliveryPort delivery = mock(CommunicationDeliveryPort.class);
     private final AlertRepository alerts = mock(AlertRepository.class);
     private final AcademicCourseRepository courses = mock(AcademicCourseRepository.class);
@@ -42,8 +41,8 @@ class DeleteCommunicationControllerTest {
 
     @BeforeEach
     void setUp() {
-        when(context.currentTeacherContext())
-                .thenReturn(Optional.of(new AcademicContextResult(institutionId, teacherId)));
+        when(context.institutionId()).thenReturn(institutionId);
+        when(context.userId()).thenReturn(teacherId);
         when(repository.findById(communicationId))
                 .thenAnswer(ignored -> Optional.ofNullable(rows.get(communicationId)));
         doAnswer(invocation -> {
@@ -141,8 +140,10 @@ class DeleteCommunicationControllerTest {
 
     @Test
     void unavailableServerContextFailsClosedWithoutReadingCommunications() throws Exception {
-        when(context.currentTeacherContext()).thenReturn(Optional.empty());
-        mvc.perform(delete(path())).andExpect(status().isForbidden());
+        when(context.institutionId())
+                .thenThrow(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED));
+        mvc.perform(delete(path())).andExpect(status().isUnauthorized());
         verifyNoInteractions(repository, delivery);
     }
 

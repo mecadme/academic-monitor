@@ -1,24 +1,13 @@
 package io.academicmonitor.context.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import io.academicmonitor.context.config.AcademicContextProperties;
 import io.academicmonitor.identity.domain.User;
 import io.academicmonitor.identity.domain.UserRepository;
-import io.academicmonitor.institution.domain.Institution;
-import io.academicmonitor.institution.domain.InstitutionMembership;
-import io.academicmonitor.institution.domain.InstitutionMembershipRepository;
-import io.academicmonitor.institution.domain.InstitutionRepository;
-import io.academicmonitor.institution.domain.InstitutionRole;
+import io.academicmonitor.institution.domain.*;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,186 +17,145 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
 class AcademicContextBootstrapServiceTest {
-
-    private static final String USER_EMAIL = "local.teacher@academicmonitor.local";
-    private static final String INSTITUTION_NAME = "Academic Monitor Local";
-    private static final String TIMEZONE = "America/Guayaquil";
-    private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final UUID INSTITUTION_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final String EMAIL = "local.teacher@academicmonitor.local";
+    private static final UUID USER_ID = UUID.randomUUID();
+    private static final UUID INSTITUTION_ID = UUID.randomUUID();
 
     @Mock
-    private UserRepository userRepository;
+    private UserRepository users;
 
     @Mock
-    private InstitutionRepository institutionRepository;
+    private InstitutionRepository institutions;
 
     @Mock
-    private InstitutionMembershipRepository membershipRepository;
+    private InstitutionMembershipRepository memberships;
+
+    @Mock
+    private PasswordEncoder passwords;
 
     private AcademicContextBootstrapService service;
 
     @BeforeEach
     void setUp() {
-        AcademicContextProperties properties = new AcademicContextProperties(USER_EMAIL, INSTITUTION_NAME, TIMEZONE);
-
-        service = new AcademicContextBootstrapService(
-                userRepository, institutionRepository, membershipRepository, properties);
+        service = serviceWithPassword("");
     }
 
     @Test
-    void createsUserInstitutionAndTeacherMembershipOnFirstBootstrap() {
-        User persistedUser = user(USER_ID);
-        Institution persistedInstitution = institution(INSTITUTION_ID);
-
-        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.empty());
-        when(userRepository.save(any(User.class))).thenReturn(persistedUser);
-        when(membershipRepository.findByUserId(USER_ID)).thenReturn(List.of());
-        when(institutionRepository.save(any(Institution.class))).thenReturn(persistedInstitution);
-
-        AcademicContextResult result = service.bootstrap();
-
-        assertEquals(new AcademicContextResult(INSTITUTION_ID, USER_ID), result);
-
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(userCaptor.capture());
-        assertEquals(USER_EMAIL, userCaptor.getValue().getEmail());
-
-        ArgumentCaptor<Institution> institutionCaptor = ArgumentCaptor.forClass(Institution.class);
-        verify(institutionRepository).save(institutionCaptor.capture());
-        assertEquals(INSTITUTION_NAME, institutionCaptor.getValue().getName());
-        assertEquals(TIMEZONE, institutionCaptor.getValue().getTimezone());
-
-        ArgumentCaptor<InstitutionMembership> membershipCaptor = ArgumentCaptor.forClass(InstitutionMembership.class);
-        verify(membershipRepository).save(membershipCaptor.capture());
-        assertEquals(USER_ID, membershipCaptor.getValue().getUserId());
-        assertEquals(INSTITUTION_ID, membershipCaptor.getValue().getInstitutionId());
-        assertEquals(InstitutionRole.TEACHER, membershipCaptor.getValue().getInstitutionRole());
+    void createsFirstIdentityAndTeacherMembershipWithoutInventingPassword() {
+        User user = persistedUser();
+        Institution institution = mock(Institution.class);
+        when(institution.getId()).thenReturn(INSTITUTION_ID);
+        when(users.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        when(users.save(any())).thenReturn(user);
+        when(institutions.save(any())).thenReturn(institution);
+        when(memberships.findByUserId(USER_ID)).thenReturn(List.of());
+        service.bootstrap();
+        var newUser = ArgumentCaptor.forClass(User.class);
+        verify(users).save(newUser.capture());
+        assertEquals(EMAIL, newUser.getValue().getEmail());
+        var membership = ArgumentCaptor.forClass(InstitutionMembership.class);
+        verify(memberships).save(membership.capture());
+        assertEquals(USER_ID, membership.getValue().getUserId());
+        assertEquals(INSTITUTION_ID, membership.getValue().getInstitutionId());
+        assertEquals(InstitutionRole.TEACHER, membership.getValue().getInstitutionRole());
+        verifyNoInteractions(passwords);
+        verify(user, never()).setPasswordHash(any());
     }
 
     @Test
-    void repeatedBootstrapReturnsSameContextWithoutCreatingDuplicates() {
-        User persistedUser = user(USER_ID);
-        Institution persistedInstitution = institution(INSTITUTION_ID);
-        InstitutionMembership membership = membership(INSTITUTION_ID);
-
-        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.empty(), Optional.of(persistedUser));
-        when(userRepository.save(any(User.class))).thenReturn(persistedUser);
-        when(membershipRepository.findByUserId(USER_ID)).thenReturn(List.of(), List.of(membership));
-        when(institutionRepository.save(any(Institution.class))).thenReturn(persistedInstitution);
-        when(institutionRepository.findById(INSTITUTION_ID)).thenReturn(Optional.of(persistedInstitution));
-
-        AcademicContextResult first = service.bootstrap();
-        AcademicContextResult second = service.bootstrap();
-
-        assertEquals(first, second);
-        assertEquals(new AcademicContextResult(INSTITUTION_ID, USER_ID), second);
-        verify(userRepository, times(1)).save(any(User.class));
-        verify(institutionRepository, times(1)).save(any(Institution.class));
-        verify(membershipRepository, times(1)).save(any(InstitutionMembership.class));
+    void existingIdentityAndMembershipArePreservedAcrossRepeatedStartup() {
+        User user = existingUser();
+        service.bootstrap();
+        service.bootstrap();
+        verify(users, never()).save(any());
+        verify(memberships, never()).save(any());
+        verifyNoInteractions(institutions, passwords);
+        verify(user, never()).setPasswordHash(any());
     }
 
     @Test
-    void reusesExistingUserWithOneValidActiveMembership() {
-        User persistedUser = user(USER_ID);
-        Institution persistedInstitution = institution(INSTITUTION_ID);
-        InstitutionMembership membership = membership(INSTITUTION_ID);
-
-        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.of(persistedUser));
-        when(membershipRepository.findByUserId(USER_ID)).thenReturn(List.of(membership));
-        when(institutionRepository.findById(INSTITUTION_ID)).thenReturn(Optional.of(persistedInstitution));
-
-        AcademicContextResult result = service.bootstrap();
-
-        assertEquals(new AcademicContextResult(INSTITUTION_ID, USER_ID), result);
-        verify(userRepository, never()).save(any(User.class));
-        verify(institutionRepository, never()).save(any(Institution.class));
-        verify(membershipRepository, never()).save(any(InstitutionMembership.class));
+    void initializesOnlyMissingPasswordOnExistingIdentity() {
+        User user = existingUser();
+        when(passwords.encode("test-only-password")).thenReturn("$argon2id$test-hash");
+        service = serviceWithPassword("test-only-password");
+        service.bootstrap();
+        verify(user).setPasswordHash("$argon2id$test-hash");
+        verify(users).save(user);
+        verify(memberships, never()).save(any());
+        verifyNoInteractions(institutions);
     }
 
     @Test
-    void failsWhenMultipleActiveMembershipsMakeContextAmbiguous() {
-        User persistedUser = user(USER_ID);
-        InstitutionMembership firstMembership = membership(INSTITUTION_ID);
-        InstitutionMembership secondMembership = membership(UUID.fromString("33333333-3333-3333-3333-333333333333"));
-
-        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.of(persistedUser));
-        when(membershipRepository.findByUserId(USER_ID)).thenReturn(List.of(firstMembership, secondMembership));
-
-        IllegalStateException exception = assertThrows(IllegalStateException.class, service::bootstrap);
-
-        assertEquals("Bootstrap user has multiple active institution memberships", exception.getMessage());
-        verifyNoInteractions(institutionRepository);
+    void neverRewritesExistingPassword() {
+        User user = existingUser();
+        when(user.getPasswordHash()).thenReturn("$argon2id$existing");
+        service = serviceWithPassword("test-only-password");
+        service.bootstrap();
+        verifyNoInteractions(passwords, institutions);
+        verify(user, never()).setPasswordHash(any());
+        verify(users, never()).save(any());
     }
 
     @Test
-    void failsWhenActiveMembershipReferencesMissingInstitution() {
-        User persistedUser = user(USER_ID);
-        InstitutionMembership membership = membership(INSTITUTION_ID);
-
-        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.of(persistedUser));
-        when(membershipRepository.findByUserId(USER_ID)).thenReturn(List.of(membership));
-        when(institutionRepository.findById(INSTITUTION_ID)).thenReturn(Optional.empty());
-
-        IllegalStateException exception = assertThrows(IllegalStateException.class, service::bootstrap);
-
-        assertEquals("Bootstrap user's active membership references a missing institution", exception.getMessage());
+    void multipleMembershipsDoNotSelectAnInstitutionOrPreventStartup() {
+        User user = persistedUser();
+        when(users.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+        when(memberships.findByUserId(USER_ID))
+                .thenReturn(List.of(
+                        new InstitutionMembership(USER_ID, INSTITUTION_ID, InstitutionRole.TEACHER),
+                        new InstitutionMembership(USER_ID, UUID.randomUUID(), InstitutionRole.TEACHER)));
+        service.bootstrap();
+        verifyNoInteractions(institutions, passwords);
+        verify(memberships, never()).save(any());
     }
 
     @Test
-    void currentTeacherContextResolvesServerUserWithoutWrites() {
-        User teacher = user(USER_ID);
-        Institution school = institution(INSTITUTION_ID);
-        InstitutionMembership membership = membership(INSTITUTION_ID);
-        when(membership.getInstitutionRole()).thenReturn(InstitutionRole.TEACHER);
-        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.of(teacher));
-        when(membershipRepository.findByUserId(USER_ID)).thenReturn(List.of(membership));
-        when(institutionRepository.findById(INSTITUTION_ID)).thenReturn(Optional.of(school));
-
-        assertEquals(Optional.of(new AcademicContextResult(INSTITUTION_ID, USER_ID)), service.currentTeacherContext());
-        verify(userRepository, never()).save(any());
-        verify(institutionRepository, never()).save(any());
-        verify(membershipRepository, never()).save(any());
+    void inactiveMembershipIsNotReplacedWithNewInstitution() {
+        User user = persistedUser();
+        var inactive = new InstitutionMembership(USER_ID, INSTITUTION_ID, InstitutionRole.TEACHER);
+        inactive.deactivate();
+        when(users.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+        when(memberships.findByUserId(USER_ID)).thenReturn(List.of(inactive));
+        service.bootstrap();
+        verifyNoInteractions(institutions, passwords);
+        verify(memberships, never()).save(any());
     }
 
     @Test
-    void currentTeacherContextDoesNotBootstrapMissingUser() {
-        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.empty());
-        assertEquals(Optional.empty(), service.currentTeacherContext());
-        verify(userRepository, never()).save(any());
-        verifyNoInteractions(institutionRepository, membershipRepository);
+    void inactiveUserRemainsInactiveWithoutPreventingOtherUsersFromLoggingIn() {
+        User inactive = new User(EMAIL);
+        inactive.deactivate();
+        when(users.findByEmail(EMAIL)).thenReturn(Optional.of(inactive));
+        service.bootstrap();
+        verifyNoInteractions(passwords, memberships, institutions);
+        verify(users, never()).save(any());
     }
 
-    @Test
-    void currentTeacherContextRejectsNonTeacherMembership() {
-        User teacher = user(USER_ID);
-        when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.of(teacher));
-        InstitutionMembership membership = membership(INSTITUTION_ID);
-        when(membership.getInstitutionRole()).thenReturn(InstitutionRole.ADMIN);
-        when(membershipRepository.findByUserId(USER_ID)).thenReturn(List.of(membership));
-        assertEquals(Optional.empty(), service.currentTeacherContext());
-        verifyNoInteractions(institutionRepository);
-    }
-
-    private User user(UUID id) {
-        User user = mock(User.class);
-        when(user.getId()).thenReturn(id);
+    private User existingUser() {
+        User user = persistedUser();
+        when(users.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+        when(memberships.findByUserId(USER_ID))
+                .thenReturn(List.of(new InstitutionMembership(USER_ID, INSTITUTION_ID, InstitutionRole.TEACHER)));
         return user;
     }
 
-    private Institution institution(UUID id) {
-        Institution institution = mock(Institution.class);
-        when(institution.getId()).thenReturn(id);
-        lenient().when(institution.isActive()).thenReturn(true);
-        return institution;
+    private User persistedUser() {
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(USER_ID);
+        when(user.isActive()).thenReturn(true);
+        return user;
     }
 
-    private InstitutionMembership membership(UUID institutionId) {
-        InstitutionMembership membership = mock(InstitutionMembership.class);
-        when(membership.isActive()).thenReturn(true);
-        lenient().when(membership.getInstitutionId()).thenReturn(institutionId);
-        return membership;
+    private AcademicContextBootstrapService serviceWithPassword(String password) {
+        return new AcademicContextBootstrapService(
+                users,
+                institutions,
+                memberships,
+                new AcademicContextProperties(EMAIL, "Academic Monitor Local", "America/Guayaquil", password),
+                passwords);
     }
 }

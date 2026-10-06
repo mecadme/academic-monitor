@@ -1,9 +1,11 @@
 import { Bell, BookOpen, ChevronRight, Home, Menu, MessageSquare, Settings, TriangleAlert } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
+import type { AuthSession } from '../../features/auth/api/auth';
+
 import { useAcademicPeriod } from '../../features/context/AcademicPeriodProvider';
 
-type Props = { path: string; onNavigate: (path: string) => void; connected?: boolean; notificationCenter?: ReactNode; children: ReactNode };
+type Props = { session: AuthSession; onLogout: () => Promise<void>; path: string; onNavigate: (path: string) => void; connected?: boolean; notificationCenter?: ReactNode; children: ReactNode };
 
 const navigation = [
   { path: '/', label: 'Inicio', icon: Home },
@@ -13,7 +15,15 @@ const navigation = [
   { path: '/settings', label: 'Configuración', icon: Settings },
 ];
 
-export function AppShell({ path, onNavigate, connected = false, notificationCenter, children }: Props) {
+export function AppShell({ session, onLogout, path, onNavigate, connected = false, notificationCenter, children }: Props) {
+  const [logoutPending, setLogoutPending] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  async function signOut() {
+    if (logoutPending) return;
+    setLogoutPending(true); setLogoutError(null);
+    try { await onLogout(); } catch { setLogoutError('No se pudo cerrar sesión. Inténtalo nuevamente.'); }
+    finally { setLogoutPending(false); }
+  }
   const [mobileOpen, setMobileOpen] = useState(false);
   const { academicYears, periods, selectedAcademicYearId, selectedPeriodId, selectAcademicYear, selectPeriod, loading } = useAcademicPeriod();
   const isActive = (itemPath: string) => itemPath === '/' ? path === '/' : path.startsWith(itemPath);
@@ -41,7 +51,7 @@ export function AppShell({ path, onNavigate, connected = false, notificationCent
             <select id="global-period" value={selectedPeriodId ?? ''} disabled={loading || periods.length === 0} onChange={(event) => selectPeriod(event.target.value)}>{periods.map((period) => <option key={period.id} value={period.id}>{period.abbreviation ? `${period.abbreviation} · ` : ''}{period.name}</option>)}</select>
           </div>
         </div>
-        <div className="topbar-actions">{notificationCenter ?? <button className="notification-button" type="button" aria-label="Notificaciones"><Bell size={19} /></button>}<button className="connection-link" type="button" onClick={() => navigate('/settings/integrations')}><span className={`connection-dot ${connected ? 'is-connected' : ''}`} />{connected ? 'Conectado' : 'Conectar'}</button></div>
+        <div className="topbar-actions">{notificationCenter ?? <button className="notification-button" type="button" aria-label="Notificaciones"><Bell size={19} /></button>}<button className="connection-link" type="button" onClick={() => navigate('/settings/integrations')}><span className={`connection-dot ${connected ? 'is-connected' : ''}`} />{connected ? 'Conectado' : 'Conectar'}</button><details className="user-menu"><summary>{session.user.email}</summary><div className="user-menu-panel"><p>{session.institution.name}</p><p>{session.institution.role === 'TEACHER' ? 'Docente' : 'Administrador'}</p><button className="btn btn-secondary" type="button" disabled={logoutPending} onClick={() => void signOut()}>{logoutPending ? 'Cerrando sesión…' : 'Cerrar sesión'}</button>{logoutError && <p role="alert" className="login-error">{logoutError}</p>}</div></details></div>
       </header>
       <main className="route-content">{children}</main>
     </div>

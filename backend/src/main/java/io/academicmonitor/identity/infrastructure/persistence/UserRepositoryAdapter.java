@@ -3,6 +3,7 @@ package io.academicmonitor.identity.infrastructure.persistence;
 import io.academicmonitor.identity.domain.User;
 import io.academicmonitor.identity.domain.UserRepository;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -12,6 +13,11 @@ class UserRepositoryAdapter implements UserRepository {
 
     UserRepositoryAdapter(UserDataRepository repository) {
         this.repository = repository;
+    }
+
+    @Override
+    public Optional<User> findById(UUID id) {
+        return repository.findById(id);
     }
 
     @Override

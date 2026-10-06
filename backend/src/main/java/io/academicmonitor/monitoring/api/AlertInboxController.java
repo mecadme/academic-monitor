@@ -2,6 +2,7 @@ package io.academicmonitor.monitoring.api;
 
 import io.academicmonitor.communication.application.AlertCommunicationService;
 import io.academicmonitor.communication.application.CommunicationResponse;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import io.academicmonitor.monitoring.application.AlertAttentionState;
 import io.academicmonitor.monitoring.application.AlertInboxQueryService;
 import io.academicmonitor.monitoring.application.AlertInboxResponse;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/alerts")
 public class AlertInboxController {
+    private final AuthenticatedAcademicContext context;
 
     private final AlertInboxQueryService alertInboxQueryService;
     private final AlertTriageService alertTriageService;
@@ -29,49 +31,41 @@ public class AlertInboxController {
     public AlertInboxController(
             AlertInboxQueryService alertInboxQueryService,
             AlertTriageService alertTriageService,
-            AlertCommunicationService alertCommunicationService) {
+            AlertCommunicationService alertCommunicationService,
+            AuthenticatedAcademicContext context) {
+        this.context = context;
         this.alertInboxQueryService = alertInboxQueryService;
         this.alertTriageService = alertTriageService;
         this.alertCommunicationService = alertCommunicationService;
     }
 
-    /** Retained for isolated inbox-controller tests that do not exercise communications. */
-    public AlertInboxController(AlertInboxQueryService alertInboxQueryService, AlertTriageService alertTriageService) {
-        this(alertInboxQueryService, alertTriageService, null);
-    }
-
     @GetMapping
     public AlertInboxResponse alerts(
-            @RequestParam UUID institutionId,
-            @RequestParam UUID teacherUserId,
             @RequestParam(required = false) UUID courseId,
             @RequestParam(required = false) UUID academicPeriodId,
             @RequestParam(required = false, defaultValue = "ALL") AlertAttentionState attentionState) {
         return alertInboxQueryService.getInbox(
-                institutionId, teacherUserId, courseId, academicPeriodId, attentionState);
+                context.institutionId(), context.userId(), courseId, academicPeriodId, attentionState);
     }
 
     @PostMapping("/{alertId}/acknowledge")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void acknowledge(
-            @PathVariable UUID alertId, @RequestParam UUID institutionId, @RequestParam UUID teacherUserId) {
-        alertTriageService.acknowledge(institutionId, teacherUserId, alertId);
+    public void acknowledge(@PathVariable UUID alertId) {
+        alertTriageService.acknowledge(context.institutionId(), context.userId(), alertId);
     }
 
     @PostMapping("/{alertId}/mark-pending")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void markPending(
-            @PathVariable UUID alertId, @RequestParam UUID institutionId, @RequestParam UUID teacherUserId) {
-        alertTriageService.markPending(institutionId, teacherUserId, alertId);
+    public void markPending(@PathVariable UUID alertId) {
+        alertTriageService.markPending(context.institutionId(), context.userId(), alertId);
     }
 
     @PostMapping("/{alertId}/communication")
     @ResponseStatus(HttpStatus.CREATED)
-    public CommunicationResponse prepareCommunication(
-            @PathVariable UUID alertId, @RequestParam UUID institutionId, @RequestParam UUID teacherUserId) {
+    public CommunicationResponse prepareCommunication(@PathVariable UUID alertId) {
         if (alertCommunicationService == null) {
             throw new IllegalStateException("Communication workflow is unavailable");
         }
-        return alertCommunicationService.prepare(institutionId, teacherUserId, alertId);
+        return alertCommunicationService.prepare(context.institutionId(), context.userId(), alertId);
     }
 }

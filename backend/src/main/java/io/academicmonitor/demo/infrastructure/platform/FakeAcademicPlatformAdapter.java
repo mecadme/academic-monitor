@@ -63,7 +63,12 @@ final class FakeAcademicPlatformAdapter implements AcademicPlatformPort {
                 List.of(period));
 
         PlatformCourseSnapshot course = new PlatformCourseSnapshot(
-                COURSE_EXTERNAL_ID, "1.º BGU A", "Física", academicYear, List.of(activity), students);
+                COURSE_EXTERNAL_ID + "-" + context.teacherUserId(),
+                "1.º BGU A",
+                "Física",
+                academicYear,
+                List.of(activity),
+                students);
 
         return new AcademicPlatformSnapshot(List.of(course));
     }

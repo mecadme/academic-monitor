@@ -28,5 +28,10 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
 
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        // Ephemeral fixture key; never used for a running development/production environment.
+        byte[] secret = new byte[32];
+        new java.security.SecureRandom().nextBytes(secret);
+        String testSecret = java.util.Base64.getEncoder().encodeToString(secret);
+        registry.add("app.auth.jwt-secret-base64", () -> testSecret);
     }
 }

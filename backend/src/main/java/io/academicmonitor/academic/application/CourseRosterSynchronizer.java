@@ -53,7 +53,7 @@ public class CourseRosterSynchronizer {
         return courseRepository
                 .findByInstitutionIdAndPlatformCodeAndExternalId(
                         institutionId, platformCode, platformCourse.externalId())
-                .map(existing -> synchronizeExistingCourse(existing, platformCourse, academicYearId))
+                .map(existing -> synchronizeExistingCourse(existing, teacherUserId, platformCourse, academicYearId))
                 .orElseGet(() -> {
                     AcademicCourse created = new AcademicCourse(
                             institutionId,
@@ -71,7 +71,10 @@ public class CourseRosterSynchronizer {
     }
 
     private AcademicCourse synchronizeExistingCourse(
-            AcademicCourse course, PlatformCourseSnapshot platformCourse, UUID academicYearId) {
+            AcademicCourse course, UUID teacherUserId, PlatformCourseSnapshot platformCourse, UUID academicYearId) {
+        if (!teacherUserId.equals(course.getTeacherUserId())) {
+            throw new AcademicCourseOwnershipException();
+        }
         boolean academicYearChanged = course.associateAcademicYear(academicYearId);
         boolean metadataChanged = course.updateMetadata(platformCourse.name(), platformCourse.subject());
 

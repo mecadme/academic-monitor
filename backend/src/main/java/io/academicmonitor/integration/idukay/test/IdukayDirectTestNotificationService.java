@@ -1,5 +1,6 @@
 package io.academicmonitor.integration.idukay.test;
 
+import io.academicmonitor.academic.application.port.AcademicPlatformContext;
 import io.academicmonitor.integration.idukay.auth.IdukayAuthenticatedSession;
 import io.academicmonitor.integration.idukay.auth.IdukaySessionProvider;
 import io.academicmonitor.integration.idukay.client.IdukayApiException;
@@ -31,7 +32,7 @@ public class IdukayDirectTestNotificationService {
     }
 
     public IdukayDirectTestNotificationResult send(IdukayDirectTestNotificationCommand command) {
-        if (command == null || command.institutionId() == null) {
+        if (command == null || command.institutionId() == null || command.teacherUserId() == null) {
             throw new IllegalArgumentException("direct notification scope is required");
         }
 
@@ -42,7 +43,8 @@ public class IdukayDirectTestNotificationService {
 
         IdukayAuthenticatedSession session;
         try {
-            session = sessionProvider.getSoleSessionForInstitution(command.institutionId());
+            session = sessionProvider.getSession(
+                    new AcademicPlatformContext(command.institutionId(), command.teacherUserId()));
         } catch (RuntimeException exception) {
             return IdukayDirectTestNotificationResult.failed(IdukayDirectTestNotificationFailure.PROVIDER_UNAVAILABLE);
         }

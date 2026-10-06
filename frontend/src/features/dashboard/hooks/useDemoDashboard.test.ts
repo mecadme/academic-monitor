@@ -82,9 +82,7 @@ describe(
 
         expect(
           mockGetDashboard,
-        ).toHaveBeenCalledWith(
-          'teacher-1',
-        );
+        ).toHaveBeenCalledWith();
 
         expect(
           result.current.institutionId,
@@ -135,7 +133,6 @@ describe(
           mockGetDashboard,
         ).toHaveBeenNthCalledWith(
           2,
-          'teacher-1',
         );
 
         expect(

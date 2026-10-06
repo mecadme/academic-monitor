@@ -1,12 +1,9 @@
+import { apiFetch } from '../../../api/apiFetch';
+
 export type TriageAlertInput = {
   alertId: string;
-  institutionId: string;
-  teacherUserId: string;
 };
 
-const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL ??
-  'http://localhost:8080';
 
 export async function acknowledgeAlert(
   input: TriageAlertInput,
@@ -23,28 +20,18 @@ export async function markAlertPending(
 async function postTriageCommand(
   {
     alertId,
-    institutionId,
-    teacherUserId,
   }: TriageAlertInput,
   command: 'acknowledge' | 'mark-pending',
 ) {
-  const query = new URLSearchParams({
-    institutionId,
-    teacherUserId,
-  });
-  const response = await fetch(
-    `${apiBaseUrl}/api/v1/alerts/${encodeURIComponent(alertId)}/${command}?${query.toString()}`,
+  await apiFetch(
+    `/api/v1/alerts/${encodeURIComponent(alertId)}/${command}`,
     {
       method: 'POST',
       headers: {
         Accept: 'application/json',
       },
     },
+    { errorMessage: (status) => `No se pudo actualizar la atención de la alerta (${status}).` },
   );
 
-  if (!response.ok) {
-    throw new Error(
-      `No se pudo actualizar la atención de la alerta (${response.status}).`,
-    );
-  }
 }

@@ -1,5 +1,6 @@
 package io.academicmonitor.identity.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -26,6 +27,10 @@ public class User {
 
     @Column(name = "email", nullable = false, length = 320)
     private String email;
+
+    @JsonIgnore
+    @Column(name = "password_hash", length = 255)
+    private String passwordHash;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "system_role", nullable = false, length = 32)
@@ -56,6 +61,18 @@ public class User {
 
     public String getEmail() {
         return email;
+    }
+
+    @JsonIgnore
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        if (passwordHash == null || !passwordHash.startsWith("$argon2id$") || passwordHash.length() > 255) {
+            throw new IllegalArgumentException("Password hash must use Argon2id");
+        }
+        this.passwordHash = passwordHash;
     }
 
     public SystemRole getSystemRole() {

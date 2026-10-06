@@ -1,9 +1,9 @@
+import { apiFetch } from './api/apiFetch';
 import type { SystemHealth } from './types';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
 export async function fetchSystemHealth(): Promise<SystemHealth> {
-  const response = await fetch(`${apiBaseUrl}/api/v1/health`, {
+  const response = await apiFetch(`/api/v1/health`, {
     headers: {
       Accept: 'application/json',
     },

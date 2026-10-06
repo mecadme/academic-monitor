@@ -258,6 +258,7 @@ class AcademicSyncServiceTest {
     void synchronizeDoesNotDuplicateExistingEntitiesAndUpdatesGrade() {
 
         AcademicCourse course = org.mockito.Mockito.mock(AcademicCourse.class);
+        when(course.getTeacherUserId()).thenReturn(TEACHER_ID);
 
         Student student = org.mockito.Mockito.mock(Student.class);
 
@@ -314,7 +315,16 @@ class AcademicSyncServiceTest {
         verify(gradeRepository).save(existingGrade);
 
         verify(alertEvaluationService)
-                .evaluate(INSTITUTION_ID, COURSE_ID, ACTIVITY_ID, STUDENT_ID, new BigDecimal("8.10"));
+                .evaluate(
+                        INSTITUTION_ID,
+                        TEACHER_ID,
+                        COURSE_ID,
+                        ACTIVITY_ID,
+                        STUDENT_ID,
+                        new BigDecimal("8.10"),
+                        null,
+                        null,
+                        "1.º BGU A");
 
         verify(alertRepository)
                 .findByCourseIdAndStatusAndActivityIdIn(COURSE_ID, AlertStatus.OPEN, List.of(ACTIVITY_ID));
@@ -324,6 +334,7 @@ class AcademicSyncServiceTest {
     void synchronizeReturnsAlertSummaryForProcessedActivities() {
 
         AcademicCourse course = org.mockito.Mockito.mock(AcademicCourse.class);
+        when(course.getTeacherUserId()).thenReturn(TEACHER_ID);
 
         Student student = org.mockito.Mockito.mock(Student.class);
 

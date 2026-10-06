@@ -1,6 +1,7 @@
 package io.academicmonitor.integration.idukay.test;
 
 import io.academicmonitor.academic.application.port.AcademicPlatformContext;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import io.academicmonitor.integration.idukay.auth.*;
 import io.academicmonitor.integration.idukay.auth.InMemoryIdukaySessionProvider;
 import io.academicmonitor.integration.idukay.course.IdukayTeacherCourseDto;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class IdukayLoginOrchestrator {
 
+    private final AuthenticatedAcademicContext context;
     private final InMemoryIdukaySessionProvider sessionProvider;
     private final IdukayAuthClient authClient;
     private final IdukayTeacherCoursesClient coursesClient;
@@ -19,7 +21,9 @@ public class IdukayLoginOrchestrator {
     public IdukayLoginOrchestrator(
             IdukayAuthClient authClient,
             IdukayTeacherCoursesClient coursesClient,
-            InMemoryIdukaySessionProvider sessionProvider) {
+            InMemoryIdukaySessionProvider sessionProvider,
+            AuthenticatedAcademicContext context) {
+        this.context = context;
 
         this.authClient = authClient;
         this.coursesClient = coursesClient;
@@ -29,6 +33,9 @@ public class IdukayLoginOrchestrator {
     public IdukayTestLoginResponse testLogin(IdukayTestLoginRequest request) {
 
         validateRequest(request);
+        var principal = context.current();
+        AcademicPlatformContext platformContext =
+                new AcademicPlatformContext(principal.institutionId(), principal.userId());
 
         char[] workingPassword = request.password().clone();
 
@@ -49,9 +56,6 @@ public class IdukayLoginOrchestrator {
 
             IdukayAuthenticatedSession authenticatedSession =
                     authClient.completeLogin(loginSession, oauthProfile, request.fingerprint());
-
-            AcademicPlatformContext platformContext =
-                    new AcademicPlatformContext(request.institutionId(), request.teacherUserId());
 
             sessionProvider.storeSession(platformContext, authenticatedSession);
 

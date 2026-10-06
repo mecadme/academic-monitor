@@ -48,11 +48,12 @@ public class DemoDashboardService {
     }
 
     @Transactional(readOnly = true)
-    public DemoDashboardResult getDashboard(UUID teacherUserId) {
+    public DemoDashboardResult getDashboard(UUID institutionId, UUID teacherUserId) {
 
-        AcademicCourse course = courseRepository.findByTeacherUserId(teacherUserId).stream()
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Demo course not found. Run demo sync first."));
+        AcademicCourse course =
+                courseRepository.findByInstitutionIdAndTeacherUserId(institutionId, teacherUserId).stream()
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalStateException("Demo course not found. Run demo sync first."));
 
         Activity activity = activityRepository
                 .findLatestByCourseId(course.getId())

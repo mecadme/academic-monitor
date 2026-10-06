@@ -1,0 +1,18 @@
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.login-card { width: min(440px, 100%); padding: clamp(24px, 5vw, 40px); border: 1px solid #e2e8f1; border-radius: 18px; background: #fff; box-shadow: 0 12px 40px rgba(24, 43, 70, .08); }
+.login-brand { display: flex; align-items: center; gap: 12px; color: #23324c; font-weight: 800; margin-bottom: 30px; }
+.login-brand .brand-logo { width: 42px; height: 42px; font-size: 14px; }
+.login-card h1 { color: #182642; font-size: 28px; margin: 0; }
+.login-card > p { color: #65748a; line-height: 1.55; margin-bottom: 26px; }
+.login-card form { display: grid; gap: 10px; }
+.login-card label { color: #34445d; font-size: 14px; font-weight: 700; }
+.login-card input, .login-card select { width: 100%; min-height: 46px; padding: 10px 12px; margin-bottom: 12px; border: 1px solid #cbd7e6; border-radius: 9px; color: #1d2b42; background: #fff; }
+.login-card button { margin-top: 8px; min-height: 46px; }
+.login-error { color: #b83232; line-height: 1.5; margin: 0; }
+.login-selection { color: #43536b; line-height: 1.5; }
+.user-menu { position: relative; color: #34445d; }
+.user-menu summary { cursor: pointer; max-width: 230px; overflow-wrap: anywhere; font-size: 13px; font-weight: 650; }
+.user-menu-panel { position: absolute; z-index: 25; right: 0; top: calc(100% + 16px); width: 260px; padding: 18px; border: 1px solid #dce4ef; border-radius: 12px; background: #fff; box-shadow: 0 8px 25px rgba(24, 43, 70, .12); }
+.user-menu-panel p { margin: 0 0 12px; overflow-wrap: anywhere; }
+.user-menu-panel .login-error { margin-top: 10px; font-size: 13px; }
+@media (max-width: 620px) { .topbar-actions { flex-wrap: wrap; justify-content: flex-end; max-width: 145px; }.user-menu summary { max-width: 140px; font-size: 11px; } }

@@ -32,7 +32,7 @@ function setup(status: Communication['status'] = 'DRAFT', deleteResponse?: Promi
       deleted = true;
       return Promise.resolve({ ok: true, status: 204 } as Response);
     }
-    if (url.includes('/context/bootstrap')) return Promise.resolve(json(scope));
+    if (url.includes('/auth/me')) return Promise.resolve(json({ user: { id: 'teacher-1', email: 'teacher@example.com', systemRole: 'USER' }, institution: { id: 'institution-1', name: 'Colegio', role: 'TEACHER' } }));
     if (url.includes('/academic-periods')) return Promise.resolve(json({ ...scope, periods: [{ id: 'period-1', academicYearId: 'year-1', academicYear: '2026-2027', externalId: 'external-period-1', abbreviation: 'P1', name: 'Período 1', order: 1, synchronized: true }] }));
     if (url.includes('/dashboard')) return Promise.resolve(json({ ...scope, summary: {}, courses: [] }));
     if (url.includes('/communications/communication-1')) return Promise.resolve(json({ ...draft, status }));
@@ -110,7 +110,7 @@ describe('delete communication draft', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Eliminar borrador' }));
     await waitFor(() => expect(window.location.pathname).toBe('/alerts'));
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/v1/communications/communication-1', {
-      method: 'DELETE', headers: { Accept: 'application/json' },
+      method: 'DELETE', credentials: 'include', headers: { accept: 'application/json', 'x-xsrf-token': 'test-csrf' },
     });
     expect(refresh).toHaveBeenCalledOnce();
     window.removeEventListener(communicationsRefreshEvent, refresh);
@@ -213,7 +213,7 @@ describe('delete draft from communications list', () => {
     const dialog = screen.getByRole('dialog', { name: '¿Eliminar este borrador?' });
     await user.click(within(dialog).getByRole('button', { name: 'Eliminar borrador' }));
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/v1/communications/communication-1', {
-      method: 'DELETE', headers: { Accept: 'application/json' },
+      method: 'DELETE', credentials: 'include', headers: { accept: 'application/json', 'x-xsrf-token': 'test-csrf' },
     });
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Seguimiento' })).not.toBeInTheDocument());
     expect(screen.getByRole('heading', { name: 'Otro borrador' })).toBeInTheDocument();

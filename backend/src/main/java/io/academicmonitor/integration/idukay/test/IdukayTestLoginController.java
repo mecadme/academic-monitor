@@ -1,6 +1,7 @@
 package io.academicmonitor.integration.idukay.test;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Profile("dev")
 @RequestMapping("/api/v1/integrations/idukay")
 @ConditionalOnProperty(prefix = "app.idukay", name = "test-login-enabled", havingValue = "true")
 public class IdukayTestLoginController {
