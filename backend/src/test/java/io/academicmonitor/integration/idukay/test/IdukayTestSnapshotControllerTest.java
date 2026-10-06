@@ -8,6 +8,7 @@ import io.academicmonitor.academic.application.AcademicBatchSyncResult;
 import io.academicmonitor.academic.application.AcademicSyncResult;
 import io.academicmonitor.academic.application.AcademicSyncService;
 import io.academicmonitor.academic.application.port.AcademicPlatformFilter;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import io.academicmonitor.integration.idukay.IdukayAcademicPlatformAdapter;
 import io.academicmonitor.integration.idukay.auth.IdukaySessionProvider;
 import io.academicmonitor.integration.idukay.course.IdukayTeacherCoursesClient;
@@ -26,12 +27,17 @@ class IdukayTestSnapshotControllerTest {
         UUID internalPeriodId = UUID.fromString("44444444-4444-4444-4444-444444444444");
         IdukayAcademicPlatformAdapter adapter = mock(IdukayAcademicPlatformAdapter.class);
         AcademicSyncService syncService = mock(AcademicSyncService.class);
+        AuthenticatedAcademicContext context = mock(AuthenticatedAcademicContext.class);
+        when(context.institutionId()).thenReturn(institutionId);
+        when(context.userId()).thenReturn(teacherId);
         IdukayTestSnapshotController controller = new IdukayTestSnapshotController(
                 adapter,
                 syncService,
                 mock(IdukaySessionProvider.class),
                 mock(IdukayTeacherCoursesClient.class),
-                mock(IdukayCoursePeriodClient.class));
+                mock(IdukayCoursePeriodClient.class),
+                null,
+                context);
         AcademicPlatformFilter filter = new AcademicPlatformFilter("external-period-t2");
         AcademicBatchSyncResult syncResult = new AcademicBatchSyncResult(
                 List.of(new AcademicSyncResult(courseId, "Course", 20, 100, 12, 8, 4, internalPeriodId)),
@@ -49,8 +55,7 @@ class IdukayTestSnapshotControllerTest {
         when(syncService.synchronizeAll(institutionId, teacherId, "IDUKAY", adapter, filter))
                 .thenReturn(syncResult);
 
-        IdukayTestSnapshotController.TestBatchSyncResponse response =
-                controller.testSync(institutionId, teacherId, "external-period-t2");
+        IdukayTestSnapshotController.TestBatchSyncResponse response = controller.testSync("external-period-t2");
 
         assertEquals(internalPeriodId, response.academicPeriodId());
         assertEquals(1, response.coursesProcessed());

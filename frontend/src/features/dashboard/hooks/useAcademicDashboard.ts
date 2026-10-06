@@ -47,8 +47,6 @@ export function useAcademicDashboard({
 
         const result =
           await fetchAcademicDashboard({
-            institutionId,
-            teacherUserId,
             academicPeriodId,
             signal,
           });

@@ -30,6 +30,7 @@ class CourseRosterSynchronizerTest {
     void enrichesLegacyCourseWithoutAcademicYear() {
         AcademicCourseRepository courseRepository = mock(AcademicCourseRepository.class);
         AcademicCourse legacyCourse = mock(AcademicCourse.class);
+        when(legacyCourse.getTeacherUserId()).thenReturn(TEACHER_ID);
 
         when(courseRepository.findByInstitutionIdAndPlatformCodeAndExternalId(INSTITUTION_ID, PLATFORM, "course-001"))
                 .thenReturn(Optional.of(legacyCourse));

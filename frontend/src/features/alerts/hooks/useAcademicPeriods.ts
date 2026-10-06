@@ -46,8 +46,6 @@ export function useAcademicPeriods({
       setError(null);
 
       const result = await fetchAcademicPeriods({
-        institutionId,
-        teacherUserId,
         signal: controller.signal,
       });
 

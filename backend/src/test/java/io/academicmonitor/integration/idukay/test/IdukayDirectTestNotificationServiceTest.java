@@ -10,6 +10,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.academicmonitor.academic.application.port.AcademicPlatformContext;
 import io.academicmonitor.integration.idukay.auth.IdukayAuthenticatedSession;
 import io.academicmonitor.integration.idukay.auth.IdukaySessionContext;
 import io.academicmonitor.integration.idukay.auth.IdukaySessionProvider;
@@ -63,7 +64,8 @@ class IdukayDirectTestNotificationServiceTest {
     @Test
     void usesExactlyTheConfiguredRecipientAndAuthenticatedSessionUserAsSender() {
         IdukayAuthenticatedSession session = session("authenticated-id", "working-profile-id");
-        when(sessions.getSoleSessionForInstitution(INSTITUTION_ID)).thenReturn(session);
+        when(sessions.getSession(new AcademicPlatformContext(INSTITUTION_ID, INSTITUTION_ID)))
+                .thenReturn(session);
         when(client.post(any(), any())).thenReturn(204);
 
         IdukayDirectTestNotificationResult result = service.send(command());
@@ -83,7 +85,8 @@ class IdukayDirectTestNotificationServiceTest {
     @Test
     void payloadDoesNotContainSelectedUsers() throws Exception {
         IdukayAuthenticatedSession session = session("authenticated-id", "working-profile-id");
-        when(sessions.getSoleSessionForInstitution(INSTITUTION_ID)).thenReturn(session);
+        when(sessions.getSession(new AcademicPlatformContext(INSTITUTION_ID, INSTITUTION_ID)))
+                .thenReturn(session);
         when(client.post(any(), any())).thenReturn(200);
 
         service.send(command());
@@ -97,7 +100,8 @@ class IdukayDirectTestNotificationServiceTest {
 
     @Test
     void doesNotPostWhenTheAuthenticatedSessionHasNoSender() {
-        when(sessions.getSoleSessionForInstitution(INSTITUTION_ID)).thenReturn(session(null, "working-profile-id"));
+        when(sessions.getSession(new AcademicPlatformContext(INSTITUTION_ID, INSTITUTION_ID)))
+                .thenReturn(session(null, "working-profile-id"));
 
         IdukayDirectTestNotificationResult result = service.send(command());
 
@@ -107,7 +111,7 @@ class IdukayDirectTestNotificationServiceTest {
 
     @Test
     void sendsWhenIdukayReturnsAny2xxStatus() {
-        when(sessions.getSoleSessionForInstitution(INSTITUTION_ID))
+        when(sessions.getSession(new AcademicPlatformContext(INSTITUTION_ID, INSTITUTION_ID)))
                 .thenReturn(session("authenticated-id", "working-profile-id"));
         when(client.post(any(), any())).thenReturn(204);
 
@@ -118,7 +122,7 @@ class IdukayDirectTestNotificationServiceTest {
 
     @Test
     void reportsA503FailureWithExactlyOnePostAttempt() {
-        when(sessions.getSoleSessionForInstitution(INSTITUTION_ID))
+        when(sessions.getSession(new AcademicPlatformContext(INSTITUTION_ID, INSTITUTION_ID)))
                 .thenReturn(session("authenticated-id", "working-profile-id"));
         when(client.post(any(), any())).thenThrow(new IdukayApiException("unavailable", 503, null));
 
@@ -134,11 +138,13 @@ class IdukayDirectTestNotificationServiceTest {
         String sensitiveSender = "sender-must-not-be-logged";
         String sensitiveContent = "content-must-not-be-logged";
         IdukayAuthenticatedSession session = session(sensitiveSender, "working-profile-id");
-        when(sessions.getSoleSessionForInstitution(INSTITUTION_ID)).thenReturn(session);
+        when(sessions.getSession(new AcademicPlatformContext(INSTITUTION_ID, INSTITUTION_ID)))
+                .thenReturn(session);
         when(client.post(any(), any())).thenThrow(new IdukayApiException("unavailable", 503, null));
 
         service(sensitiveRecipient)
-                .send(new IdukayDirectTestNotificationCommand(INSTITUTION_ID, "Subject", sensitiveContent));
+                .send(new IdukayDirectTestNotificationCommand(
+                        INSTITUTION_ID, INSTITUTION_ID, "Subject", sensitiveContent));
 
         assertFalse(
                 logs.list.stream().anyMatch(event -> event.getFormattedMessage().contains(sensitiveRecipient)));
@@ -153,7 +159,7 @@ class IdukayDirectTestNotificationServiceTest {
     }
 
     private static IdukayDirectTestNotificationCommand command() {
-        return new IdukayDirectTestNotificationCommand(INSTITUTION_ID, "Subject", "<p>Content</p>");
+        return new IdukayDirectTestNotificationCommand(INSTITUTION_ID, INSTITUTION_ID, "Subject", "<p>Content</p>");
     }
 
     private static IdukayAuthenticatedSession session(String authenticatedUserId, String workingProfile) {

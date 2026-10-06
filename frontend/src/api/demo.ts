@@ -1,3 +1,5 @@
+import { apiFetch } from './apiFetch';
+
 export type DemoScenario = "INITIAL" | "IMPROVED";
 
 export interface SyncResult {
@@ -39,14 +41,12 @@ export interface DashboardResult {
   }>;
 }
 
-const API_URL =
-  import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
 export async function syncDemo(
   scenario: DemoScenario,
 ): Promise<SyncResult> {
-  const response = await fetch(
-    `${API_URL}/api/v1/demo/sync?scenario=${scenario}`,
+  const response = await apiFetch(
+    `/api/v1/demo/sync?scenario=${scenario}`,
     {
       method: "POST",
     },
@@ -60,10 +60,9 @@ export async function syncDemo(
 }
 
 export async function getDashboard(
-  teacherUserId: string,
 ): Promise<DashboardResult> {
-  const response = await fetch(
-    `${API_URL}/api/v1/demo/dashboard?teacherUserId=${teacherUserId}`,
+  const response = await apiFetch(
+    `/api/v1/demo/dashboard`,
   );
 
   if (!response.ok) {

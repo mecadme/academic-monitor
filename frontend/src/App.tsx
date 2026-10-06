@@ -12,6 +12,8 @@ import { DeleteDraftConfirmation } from './components/ConfirmationDialog';
 import { AppShell } from './components/layout/AppShell';
 import { AcademicPeriodProvider, useAcademicPeriod } from './features/context/AcademicPeriodProvider';
 import { useAcademicContext } from './features/context/hooks/useAcademicContext';
+import { LoginPage } from './features/auth/components/LoginPage';
+import type { AuthSession } from './features/auth/api/auth';
 import { type AcademicDashboard, type AcademicDashboardCourse } from './features/dashboard/api/fetchAcademicDashboard';
 import { DataStatusCard } from './features/dashboard/components/DataStatusCard';
 import { IdukayIntegrationCard } from './features/dashboard/components/IdukayIntegrationCard';
@@ -24,32 +26,36 @@ type DashboardPageProps = Scope & { dashboard: AcademicDashboard | null; loading
 
 function App() {
   const context = useAcademicContext();
-  if (context.loading) return <LoadingShell label="Inicializando contexto académico…" />;
-  if (context.error || !context.institutionId || !context.teacherUserId) return <ErrorShell message={context.error ?? 'No hay contexto académico disponible.'} />;
-  return <AcademicPeriodProvider institutionId={context.institutionId} teacherUserId={context.teacherUserId}><AcademicMonitor institutionId={context.institutionId} teacherUserId={context.teacherUserId} /></AcademicPeriodProvider>;
+  useEffect(() => {
+    if (context.loading) return;
+    if (!context.session && window.location.pathname !== '/login') window.history.replaceState({}, '', '/login');
+    else if (context.session && window.location.pathname === '/login') { window.history.replaceState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }
+  }, [context.loading, context.session]);
+  if (context.loading) return <LoadingShell label="Verificando sesión…" />;
+  if (!context.session) return <LoginPage onLogin={context.signIn} initialError={context.error} />;
+  return <AcademicPeriodProvider key={`${context.session.user.id}:${context.session.institution.id}`} institutionId={context.institutionId} teacherUserId={context.teacherUserId}><AcademicMonitor institutionId={context.session.institution.id} teacherUserId={context.session.user.id} session={context.session} onLogout={context.signOut} /></AcademicPeriodProvider>;
 }
 
-function AcademicMonitor({ institutionId, teacherUserId }: Pick<Scope, 'institutionId' | 'teacherUserId'>) {
+function AcademicMonitor({ institutionId, teacherUserId, session, onLogout }: Pick<Scope, 'institutionId' | 'teacherUserId'> & { session: AuthSession; onLogout: () => Promise<void> }) {
   const period = useAcademicPeriod();
   const [location, navigate] = useLocation();
   const dashboard = useAcademicDashboard({ institutionId, teacherUserId, academicPeriodId: period.selectedPeriodId });
-  const notificationScope = { institutionId, teacherUserId };
   const idukay = useIdukayIntegration({ institutionId, teacherUserId, onSyncSuccess: async () => { await period.refresh(); await dashboard.refresh(); }, onSyncFinished: async () => { window.dispatchEvent(new Event('academic-monitor:notifications-refresh')); } });
   const scope: Scope = { institutionId, teacherUserId, courses: dashboard.dashboard?.courses ?? [], periods: period.periods, selectedPeriod: period.selectedPeriod, selectedPeriodId: period.selectedPeriodId, selectedPeriodName: period.selectedPeriod?.name ?? null };
   let content: ReactNode;
-  if (period.loading) content = <PageSkeleton />;
+  if (location.path === '/settings' || location.path === '/settings/integrations') content = <SettingsPage idukay={idukay} />;
+  else if (period.loading) content = <PageSkeleton />;
   else if (period.error) content = <PageError message={period.error} onRetry={period.refresh} />;
   else if (!period.selectedPeriodId) content = <EmptyState title="No hay períodos disponibles" message="Sincroniza un período académico desde Integraciones para comenzar." actionLabel="Ir a integraciones" onAction={() => navigate('/settings/integrations')} />;
   else if (location.path === '/') content = <DashboardPage {...scope} dashboard={dashboard.dashboard} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.refresh} onNavigate={navigate} idukay={idukay} />;
   else if (location.path === '/courses') content = <CoursesPage {...scope} dashboard={dashboard.dashboard} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.refresh} onNavigate={navigate} idukay={idukay} />;
   else if (location.path.startsWith('/courses/')) content = <CourseDetailPage {...scope} dashboard={dashboard.dashboard} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.refresh} onNavigate={navigate} idukay={idukay} path={location.path} search={location.search} />;
   else if (location.path === '/alerts') content = <AlertsPage {...scope} onNavigate={navigate} />;
-  else if (location.path === '/notifications') content = <NotificationsPage scope={notificationScope} onNavigate={navigate} />;
-  else if (location.path.startsWith('/communications/')) content = <CommunicationDetailPage institutionId={institutionId} teacherUserId={teacherUserId} communicationId={decodeURIComponent(location.path.slice('/communications/'.length))} onNavigate={navigate} />;
-  else if (location.path === '/communications') content = <CommunicationsPage institutionId={institutionId} teacherUserId={teacherUserId} onNavigate={navigate} />;
-  else if (location.path === '/settings' || location.path === '/settings/integrations') content = <SettingsPage idukay={idukay} />;
+  else if (location.path === '/notifications') content = <NotificationsPage onNavigate={navigate} />;
+  else if (location.path.startsWith('/communications/')) content = <CommunicationDetailPage communicationId={decodeURIComponent(location.path.slice('/communications/'.length))} onNavigate={navigate} />;
+  else if (location.path === '/communications') content = <CommunicationsPage onNavigate={navigate} />;
   else content = <EmptyState title="Página no encontrada" message="La dirección no corresponde a una vista de Academic Monitor." actionLabel="Volver al inicio" onAction={() => navigate('/')} />;
-  return <AppShell path={location.path} onNavigate={navigate} connected={idukay.connected} notificationCenter={<NotificationCenter scope={notificationScope} onNavigate={navigate} />}>{content}</AppShell>;
+  return <AppShell session={session} onLogout={onLogout} path={location.path} onNavigate={navigate} connected={idukay.connected} notificationCenter={<NotificationCenter onNavigate={navigate} />}>{content}</AppShell>;
 }
 
 function DashboardPage({ dashboard, loading, error, onRetry, onNavigate, selectedPeriodName, selectedPeriod, idukay }: DashboardPageProps) {
@@ -81,9 +87,9 @@ function CourseDetailPage({ dashboard, loading, error, onRetry, path, search, on
 function AlertsPage({ onNavigate, ...scope }: Scope & { onNavigate: (path: string) => void }) { const [courseId, setCourseId] = useState<string | null>(null); const [attention, setAttention] = useState<AlertAttentionState>('PENDING'); const inbox = useAlertInbox({ institutionId: scope.institutionId, teacherUserId: scope.teacherUserId, courseId, academicPeriodId: scope.selectedPeriodId, attentionState: attention }); return <section className="page"><PageTitle title="Alertas" subtitle="Bandeja académica del período seleccionado" /><Inbox {...scope} inbox={inbox} courseId={courseId} attention={attention} onCourseChange={setCourseId} onAttentionChange={setAttention} onNavigate={onNavigate} /></section>; }
 function CourseAlerts({ course, onNavigate = () => undefined, ...scope }: Scope & { course: AcademicDashboardCourse; onNavigate?: (path: string) => void }) { const [attention, setAttention] = useState<AlertAttentionState>('PENDING'); const inbox = useAlertInbox({ institutionId: scope.institutionId, teacherUserId: scope.teacherUserId, courseId: course.id, academicPeriodId: scope.selectedPeriodId, attentionState: attention }); return <Inbox {...scope} inbox={inbox} courseId={course.id} attention={attention} onCourseChange={() => undefined} onAttentionChange={setAttention} hideCourse onNavigate={onNavigate} />; }
 type InboxProps = Scope & { inbox: ReturnType<typeof useAlertInbox>; courseId: string | null; attention: AlertAttentionState; onCourseChange: (value: string | null) => void; onAttentionChange: (value: AlertAttentionState) => void; onNavigate: (path: string) => void; hideCourse?: boolean; };
-function Inbox({ inbox, courseId, attention, onCourseChange, onAttentionChange, onNavigate, hideCourse, ...scope }: InboxProps) { return <AlertInboxPanel courses={scope.courses} periods={scope.periods} inbox={inbox.inbox} loading={inbox.loading} error={inbox.error} actionError={inbox.actionError} actionAlertIds={inbox.actionAlertIds} selectedCourseId={courseId} selectedAcademicPeriodId={scope.selectedPeriodId} attentionState={attention} onCourseChange={onCourseChange} onAcademicPeriodChange={() => undefined} onAttentionStateChange={onAttentionChange} onRetry={inbox.refresh} onRetryAction={inbox.retryAction} onAcknowledge={inbox.acknowledge} onMarkPending={inbox.markPending} institutionId={scope.institutionId} teacherUserId={scope.teacherUserId} showCourseFilter={!hideCourse} showPeriodFilter={false} onCommunicationNavigate={(communicationId) => onNavigate(`/communications/${communicationId}`)} />; }
+function Inbox({ inbox, courseId, attention, onCourseChange, onAttentionChange, onNavigate, hideCourse, ...scope }: InboxProps) { return <AlertInboxPanel courses={scope.courses} periods={scope.periods} inbox={inbox.inbox} loading={inbox.loading} error={inbox.error} actionError={inbox.actionError} actionAlertIds={inbox.actionAlertIds} selectedCourseId={courseId} selectedAcademicPeriodId={scope.selectedPeriodId} attentionState={attention} onCourseChange={onCourseChange} onAcademicPeriodChange={() => undefined} onAttentionStateChange={onAttentionChange} onRetry={inbox.refresh} onRetryAction={inbox.retryAction} onAcknowledge={inbox.acknowledge} onMarkPending={inbox.markPending} showCourseFilter={!hideCourse} showPeriodFilter={false} onCommunicationNavigate={(communicationId) => onNavigate(`/communications/${communicationId}`)} />; }
 
-function CommunicationsPage({ institutionId, teacherUserId, onNavigate }: Pick<Scope, 'institutionId' | 'teacherUserId'> & { onNavigate: (path: string) => void }) {
+function CommunicationsPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   const [status, setStatus] = useState<Communication['status']>('DRAFT');
   const [items, setItems] = useState<Communication[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,12 +105,12 @@ function CommunicationsPage({ institutionId, teacherUserId, onNavigate }: Pick<S
     if (!preserveItems) setItems(null);
     setError(null);
     try {
-      const next = await fetchCommunications({ institutionId, teacherUserId }, status);
+      const next = await fetchCommunications(status);
       if (requestId === requestSequence.current) setItems(next);
     } catch (err) {
       if (requestId === requestSequence.current) setError(err instanceof Error ? err.message : 'No se pudieron cargar las comunicaciones.');
     }
-  }, [institutionId, status, teacherUserId]);
+  }, [status]);
 
   useEffect(() => {
     void load();
@@ -157,8 +163,7 @@ function CommunicationsPage({ institutionId, teacherUserId, onNavigate }: Pick<S
   </section>;
 }
 
-function CommunicationDetailPage({ institutionId, teacherUserId, communicationId, onNavigate }: Pick<Scope, 'institutionId' | 'teacherUserId'> & { communicationId: string; onNavigate: (path: string) => void }) {
-  const scope = { institutionId, teacherUserId };
+function CommunicationDetailPage({ communicationId, onNavigate }: { communicationId: string; onNavigate: (path: string) => void }) {
   const [communication, setCommunication] = useState<Communication | null>(null);
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
@@ -168,10 +173,10 @@ function CommunicationDetailPage({ institutionId, teacherUserId, communicationId
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const busy = saving || deleting;
-  const load = useCallback(async () => { setCommunication(null); setError(null); try { const next = await fetchCommunication(communicationId, scope); setCommunication(next); setSubject(next.subject); setContent(htmlToEditableText(next.content)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo cargar la comunicación.'); } }, [communicationId, institutionId, teacherUserId]);
+  const load = useCallback(async () => { setCommunication(null); setError(null); try { const next = await fetchCommunication(communicationId); setCommunication(next); setSubject(next.subject); setContent(htmlToEditableText(next.content)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo cargar la comunicación.'); } }, [communicationId]);
   useEffect(() => { void load(); }, [load]);
-  const save = async () => { if (!communication || communication.status !== 'DRAFT' || busy) return; setSaving(true); setError(null); try { const next = await saveCommunicationDraft(communication.id, scope, subject, editableTextToHtml(content)); setCommunication(next); setSubject(next.subject); setContent(htmlToEditableText(next.content)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo guardar el borrador.'); } finally { setSaving(false); } };
-  const send = async () => { if (!communication || communication.status !== 'DRAFT' || busy) return; setSaving(true); setError(null); try { const next = await sendCommunication(communication.id, scope); setCommunication(next); setConfirmingSend(false); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo enviar la comunicación.'); } finally { setSaving(false); } };
+  const save = async () => { if (!communication || communication.status !== 'DRAFT' || busy) return; setSaving(true); setError(null); try { const next = await saveCommunicationDraft(communication.id, subject, editableTextToHtml(content)); setCommunication(next); setSubject(next.subject); setContent(htmlToEditableText(next.content)); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo guardar el borrador.'); } finally { setSaving(false); } };
+  const send = async () => { if (!communication || communication.status !== 'DRAFT' || busy) return; setSaving(true); setError(null); try { const next = await sendCommunication(communication.id); setCommunication(next); setConfirmingSend(false); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo enviar la comunicación.'); } finally { setSaving(false); } };
   const removeDraft = async () => { if (!communication || communication.status !== 'DRAFT' || busy) return; setDeleting(true); setError(null); try { await deleteCommunicationDraft(communication.id); setCommunication(null); setConfirmingDelete(false); onNavigate('/alerts'); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo eliminar el borrador.'); } finally { setDeleting(false); } };
   if (error && !communication) return <section className="page"><button className="back-link" type="button" onClick={() => onNavigate('/communications')}>← Comunicaciones</button><PageError message={error} onRetry={load} /></section>;
   if (!communication) return <PageSkeleton />;
@@ -192,7 +197,6 @@ function Unavailable({ title, message }: { title: string; message: string }) { r
 function PageSkeleton() { return <section className="page"><div className="skeleton heading" /><div className="metric-grid">{[1, 2, 3, 4].map((item) => <div key={item} className="skeleton metric" />)}</div><div className="skeleton content" /></section>; }
 function PageError({ message, onRetry }: { message: string; onRetry: () => void | Promise<void> }) { return <section className="error-state" role="alert"><h2>No se pudo cargar esta vista</h2><p>{message}</p><button className="btn btn-primary" onClick={() => void onRetry()}>Reintentar</button></section>; }
 function LoadingShell({ label }: { label: string }) { return <main className="loading-shell"><div className="loading-card"><div className="loading-mark">AM</div><h1>Academic Monitor</h1><p>{label}</p></div></main>; }
-function ErrorShell({ message }: { message: string }) { return <main className="loading-shell"><div className="loading-card"><div className="loading-mark">!</div><h1>No se pudo cargar Academic Monitor</h1><p>{message}</p></div></main>; }
 function statusLabel(status: Communication['status']) { return ({ DRAFT: 'Borrador', PENDING: 'Enviando…', SENT: 'Enviado', FAILED: 'No se pudo enviar' })[status]; }
 function formatDate(value: string) { return new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); }
 function formatScore(value: number) { return new Intl.NumberFormat('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }

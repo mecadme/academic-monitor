@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../api/apiFetch';
+
 export type AcademicDashboard = {
   institutionId: string;
   teacherUserId: string;
@@ -25,30 +27,20 @@ export type AcademicDashboardCourse = {
 };
 
 export type FetchAcademicDashboardInput = {
-  institutionId: string;
-  teacherUserId: string;
   academicPeriodId?: string | null;
   signal?: AbortSignal;
 };
 
-const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL ??
-  'http://localhost:8080';
 
 export async function fetchAcademicDashboard({
-  institutionId,
-  teacherUserId,
   academicPeriodId,
   signal,
 }: FetchAcademicDashboardInput): Promise<AcademicDashboard> {
-  const query = new URLSearchParams({
-    institutionId,
-    teacherUserId,
-  });
+  const query = new URLSearchParams();
   if (academicPeriodId) query.set('academicPeriodId', academicPeriodId);
 
-  const response = await fetch(
-    `${apiBaseUrl}/api/v1/dashboard?${query.toString()}`,
+  const response = await apiFetch(
+    `/api/v1/dashboard${query.size ? `?${query.toString()}` : ''}`,
     {
       method: 'GET',
       headers: {
@@ -56,13 +48,9 @@ export async function fetchAcademicDashboard({
       },
       signal,
     },
+    { errorMessage: (status) => `No se pudo cargar el dashboard académico (${status}).` },
   );
 
-  if (!response.ok) {
-    throw new Error(
-      `No se pudo cargar el dashboard académico (${response.status}).`,
-    );
-  }
 
   return response.json();
 }

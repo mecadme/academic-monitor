@@ -45,9 +45,7 @@ export function useDemoDashboard() {
       );
 
       const data =
-        await getDashboard(
-          sync.teacherUserId,
-        );
+        await getDashboard();
 
       setDashboard(data);
     } catch (err) {
@@ -71,9 +69,7 @@ export function useDemoDashboard() {
       setError(null);
 
       const data =
-        await getDashboard(
-          teacherUserId,
-        );
+        await getDashboard();
 
       setDashboard(data);
     } catch (err) {

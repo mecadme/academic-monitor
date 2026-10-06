@@ -22,6 +22,12 @@ app:
     user-email: ${APP_BOOTSTRAP_USER_EMAIL:local.teacher@academicmonitor.local}
     institution-name: ${APP_BOOTSTRAP_INSTITUTION_NAME:Academic Monitor Local}
     timezone: ${APP_BOOTSTRAP_TIMEZONE:America/Guayaquil}
+  auth:
+    access-ttl: ${APP_AUTH_ACCESS_TTL:15m}
+    refresh-ttl: ${APP_AUTH_REFRESH_TTL:7d}
+    jwt-secret-base64: ${APP_AUTH_JWT_SECRET_BASE64:}
+    cookie-secure: ${APP_AUTH_COOKIE_SECURE:true}
+    cookie-same-site: ${APP_AUTH_COOKIE_SAME_SITE:Lax}
   ollama:
     base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
   cors:
@@ -33,6 +39,12 @@ app:
     guardian-student-fetch-concurrency: ${IDUKAY_GUARDIAN_STUDENT_FETCH_CONCURRENCY:8}
     test-login-enabled: ${IDUKAY_TEST_LOGIN_ENABLED:false}
     test-notification-recipient-user-id: ${IDUKAY_TEST_NOTIFICATION_RECIPIENT_USER_ID:}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 
 management:
   endpoint:

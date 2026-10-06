@@ -1,3 +1,5 @@
+import { apiFetch } from '../../../api/apiFetch';
+
 export type AlertSeverity = 'CRITICAL' | 'WARNING';
 export type AlertAttentionState =
   | 'PENDING'
@@ -39,30 +41,20 @@ export type AlertInboxItem = {
 };
 
 export type FetchAlertInboxInput = {
-  institutionId: string;
-  teacherUserId: string;
   courseId?: string | null;
   academicPeriodId?: string | null;
   attentionState?: AlertAttentionState;
   signal?: AbortSignal;
 };
 
-const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL ??
-  'http://localhost:8080';
 
 export async function fetchAlertInbox({
-  institutionId,
-  teacherUserId,
   courseId,
   academicPeriodId,
   attentionState,
   signal,
 }: FetchAlertInboxInput): Promise<AlertInbox> {
-  const query = new URLSearchParams({
-    institutionId,
-    teacherUserId,
-  });
+  const query = new URLSearchParams();
 
   if (courseId) {
     query.set('courseId', courseId);
@@ -76,8 +68,8 @@ export async function fetchAlertInbox({
     query.set('attentionState', attentionState);
   }
 
-  const response = await fetch(
-    `${apiBaseUrl}/api/v1/alerts?${query.toString()}`,
+  const response = await apiFetch(
+    `/api/v1/alerts${query.size ? `?${query.toString()}` : ''}`,
     {
       method: 'GET',
       headers: {
@@ -85,13 +77,9 @@ export async function fetchAlertInbox({
       },
       signal,
     },
+    { errorMessage: (status) => `No se pudieron cargar las alertas (${status}).` },
   );
 
-  if (!response.ok) {
-    throw new Error(
-      `No se pudieron cargar las alertas (${response.status}).`,
-    );
-  }
 
   return response.json();
 }

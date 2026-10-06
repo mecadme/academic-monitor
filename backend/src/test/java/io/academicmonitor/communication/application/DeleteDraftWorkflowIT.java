@@ -9,7 +9,11 @@ import io.academicmonitor.academic.domain.*;
 import io.academicmonitor.communication.api.CommunicationController;
 import io.academicmonitor.communication.application.port.CommunicationDeliveryPort;
 import io.academicmonitor.communication.domain.*;
-import io.academicmonitor.context.application.AcademicContextBootstrapService;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
+import io.academicmonitor.identity.domain.User;
+import io.academicmonitor.institution.domain.Institution;
+import io.academicmonitor.institution.domain.InstitutionMembership;
+import io.academicmonitor.institution.domain.InstitutionRole;
 import io.academicmonitor.monitoring.application.AlertInboxQueryService;
 import io.academicmonitor.monitoring.domain.*;
 import io.academicmonitor.notification.domain.AppNotificationRepository;
@@ -35,9 +39,6 @@ class DeleteDraftWorkflowIT extends PostgresIntegrationTest {
     private CommunicationRepository communications;
 
     @Autowired
-    private AcademicContextBootstrapService context;
-
-    @Autowired
     private AlertInboxQueryService inbox;
 
     @Autowired
@@ -58,9 +59,11 @@ class DeleteDraftWorkflowIT extends PostgresIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        var current = context.bootstrap();
-        institutionId = current.institutionId();
-        teacherId = current.teacherUserId();
+        institutionId =
+                persist(new Institution("Draft workflow", "America/Guayaquil")).getId();
+        teacherId = persist(new User("draft-" + UUID.randomUUID() + "@example.test"))
+                .getId();
+        persist(new InstitutionMembership(teacherId, institutionId, InstitutionRole.TEACHER));
         String suffix = UUID.randomUUID().toString();
         AcademicYear year =
                 persist(new AcademicYear(institutionId, "TEST", suffix, "Year", "2026-2027", BigDecimal.TEN));
@@ -99,7 +102,10 @@ class DeleteDraftWorkflowIT extends PostgresIntegrationTest {
         long notificationCount =
                 notifications.findByOwner(institutionId, teacherId, false, 100).size();
         Object[] alertBefore = alertRow();
-        var mvc = MockMvcBuilders.standaloneSetup(new CommunicationController(service, context))
+        var authenticatedContext = mock(AuthenticatedAcademicContext.class);
+        when(authenticatedContext.institutionId()).thenReturn(institutionId);
+        when(authenticatedContext.userId()).thenReturn(teacherId);
+        var mvc = MockMvcBuilders.standaloneSetup(new CommunicationController(service, authenticatedContext))
                 .build();
         mvc.perform(delete("/api/v1/communications/" + draft.id())).andExpect(status().isNoContent());
         entityManager.clear();

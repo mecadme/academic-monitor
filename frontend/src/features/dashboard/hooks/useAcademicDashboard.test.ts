@@ -102,12 +102,12 @@ describe('useAcademicDashboard', () => {
 
     const [url, request] = fetchMock.mock.calls[0];
     expect(String(url)).toContain(
-      '/api/v1/dashboard?institutionId=institution-1&teacherUserId=teacher-1',
+      '/api/v1/dashboard',
     );
     expect(request).toMatchObject({
       method: 'GET',
       headers: {
-        Accept: 'application/json',
+        accept: 'application/json',
       },
     });
     expect(result.current.loading).toBe(false);

@@ -4,8 +4,10 @@ import io.academicmonitor.communication.application.ManualNotificationFailure;
 import io.academicmonitor.communication.application.ManualNotificationRequest;
 import io.academicmonitor.communication.application.ManualNotificationResult;
 import io.academicmonitor.communication.application.ManualNotificationService;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,15 +16,20 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Profile("dev")
 @RequestMapping("/api/v1/integrations/idukay")
 @ConditionalOnProperty(prefix = "app.idukay", name = "test-login-enabled", havingValue = "true")
 public class IdukayTestNotificationController {
 
+    private final AuthenticatedAcademicContext context;
     private final ManualNotificationService service;
     private final IdukayDirectTestNotificationService directService;
 
     public IdukayTestNotificationController(
-            ManualNotificationService service, IdukayDirectTestNotificationService directService) {
+            ManualNotificationService service,
+            IdukayDirectTestNotificationService directService,
+            AuthenticatedAcademicContext context) {
+        this.context = context;
         this.service = service;
         this.directService = directService;
     }
@@ -31,7 +38,7 @@ public class IdukayTestNotificationController {
     public ResponseEntity<IdukayDirectTestNotificationResponse> sendDirect(
             @Valid @RequestBody IdukayDirectTestNotificationRequest request) {
         IdukayDirectTestNotificationResult result = directService.send(new IdukayDirectTestNotificationCommand(
-                request.getInstitutionId(), request.getSubject(), request.getContent()));
+                context.institutionId(), context.userId(), request.getSubject(), request.getContent()));
         if (result.sent()) {
             return ResponseEntity.ok(new IdukayDirectTestNotificationResponse("SENT"));
         }
@@ -43,11 +50,7 @@ public class IdukayTestNotificationController {
     public ResponseEntity<IdukayTestNotificationResponse> send(
             @Valid @RequestBody IdukayTestNotificationRequest request) {
         ManualNotificationResult result = service.send(new ManualNotificationRequest(
-                request.institutionId(),
-                request.teacherUserId(),
-                request.studentId(),
-                request.subject(),
-                request.content()));
+                context.institutionId(), context.userId(), request.studentId(), request.subject(), request.content()));
         if (result.succeeded()) {
             return ResponseEntity.ok(new IdukayTestNotificationResponse(result.communicationId(), "SENT"));
         }

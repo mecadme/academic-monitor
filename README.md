@@ -2,11 +2,11 @@
 
 Academic Monitor es una plataforma web para seguimiento academico docente. El proyecto busca sincronizar informacion de plataformas educativas, detectar situaciones que requieren atencion mediante reglas deterministas y ayudar a preparar comunicaciones revisadas por docentes con apoyo de IA local.
 
-Este repositorio esta en el primer hito tecnico. Todavia no implementa autenticacion, Idukay, alertas ni logica academica.
+El repositorio implementa autenticación multiusuario, contexto institucional, sincronización Idukay, seguimiento de alertas, comunicaciones y notificaciones. La identidad académica se obtiene del usuario autenticado.
 
 ## Estado del proyecto
 
-Bootstrap inicial:
+Componentes:
 
 - Backend Spring Boot 4.1.x con Java 21 y Maven.
 - Frontend React 19 + TypeScript + Vite 8 + pnpm.
@@ -14,7 +14,8 @@ Bootstrap inicial:
 - Ollama.
 - Docker Compose.
 - Endpoint `GET /api/v1/health`.
-- Pantalla inicial de estado.
+- Login con correo y contraseña, JWT y refresh rotatorio en cookies HttpOnly.
+- Dashboard, alertas, comunicaciones y notificaciones por docente.
 - GitHub Actions para backend, frontend y compose.
 
 ## Arquitectura
@@ -55,6 +56,8 @@ Copia la plantilla de variables locales:
 ```bash
 cp .env.example .env
 ```
+
+Antes de iniciar, configura `APP_AUTH_JWT_SECRET_BASE64`, `APP_BOOTSTRAP_PASSWORD` y `APP_AUTH_COOKIE_SECURE=false` en tu `.env` local siguiendo [Autenticación y desarrollo local](docs/authentication.md). Conserva el correo bootstrap existente para reutilizar sus datos. No hay contraseña predeterminada ni generación automática del secreto JWT.
 
 Levanta todo el sistema:
 
@@ -107,7 +110,7 @@ Backend local:
 
 ```bash
 cd backend
-mvn spring-boot:run
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 Frontend local:
@@ -144,6 +147,8 @@ pnpm build
 El repositorio es publico. No se deben versionar secretos, tokens, cookies, respaldos, exports de Idukay, logs ni datos reales de estudiantes, docentes o instituciones.
 
 Usa `.env` para configuracion local y conserva solo `.env.example` en git.
+
+Spring Boot ejecutado directamente requiere las variables en su entorno; no carga `.env` automáticamente. Docker Compose sí carga ese archivo. La [guía de autenticación](docs/authentication.md) describe cookies, CSRF, selección de institución, bootstrap y pruebas.
 
 ## Roadmap inmediato
 

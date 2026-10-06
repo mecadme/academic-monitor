@@ -88,13 +88,13 @@ describe('useAlertInbox', () => {
 
     const [url, request] = fetchMock.mock.calls[0];
     expect(String(url)).toContain(
-      '/api/v1/alerts?institutionId=institution-1&teacherUserId=teacher-1&attentionState=PENDING',
+      '/api/v1/alerts?attentionState=PENDING',
     );
     expect(String(url)).not.toContain('courseId=');
     expect(request).toMatchObject({
       method: 'GET',
       headers: {
-        Accept: 'application/json',
+        accept: 'application/json',
       },
     });
     expect(result.current.loading).toBe(false);
@@ -379,7 +379,7 @@ describe('useAlertInbox', () => {
 
     const [commandUrl, commandRequest] = fetchMock.mock.calls[1];
     expect(String(commandUrl)).toContain(
-      '/api/v1/alerts/alert-all/acknowledge?institutionId=institution-1&teacherUserId=teacher-1',
+      '/api/v1/alerts/alert-all/acknowledge',
     );
     expect(String(commandUrl)).not.toContain('courseId=');
     expect(String(commandUrl)).not.toContain('academicPeriodId=');
@@ -420,7 +420,7 @@ describe('useAlertInbox', () => {
     });
 
     expect(String(fetchMock.mock.calls[1][0])).toContain(
-      '/api/v1/alerts/alert-all/mark-pending?institutionId=institution-1&teacherUserId=teacher-1',
+      '/api/v1/alerts/alert-all/mark-pending',
     );
     expect(String(fetchMock.mock.calls[2][0])).toContain(
       'attentionState=ACKNOWLEDGED',

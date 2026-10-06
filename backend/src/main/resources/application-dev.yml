@@ -1,0 +1,11 @@
+app:
+  bootstrap:
+    password: ${APP_BOOTSTRAP_PASSWORD:}
+  auth:
+    cookie-secure: ${APP_AUTH_COOKIE_SECURE:false}
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

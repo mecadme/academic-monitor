@@ -1,17 +1,17 @@
 import { AlertTriangle, Bell, Check, CircleAlert, RefreshCw, X, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
-import { type AppNotification, type AppNotificationType, type NotificationScope } from '../api/notifications';
+import { type AppNotification, type AppNotificationType } from '../api/notifications';
 import { useNotifications } from '../hooks/useNotifications';
 
 type Navigation = (path: string) => void;
-type Props = { scope: NotificationScope; onNavigate: Navigation };
+type Props = { onNavigate: Navigation };
 
-export function NotificationCenter({ scope, onNavigate }: Props) {
+export function NotificationCenter({ onNavigate }: Props) {
   const [open, setOpen] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
-  const notifications = useNotifications(scope);
+  const notifications = useNotifications();
   const unreadLabel = notifications.unreadCount > 99 ? '99+' : String(notifications.unreadCount);
   const visible = unreadOnly ? notifications.items.filter((item) => !item.read) : notifications.items;
 
@@ -41,9 +41,9 @@ export function NotificationCenter({ scope, onNavigate }: Props) {
   </div>;
 }
 
-export function NotificationsPage({ scope, onNavigate }: Props) {
+export function NotificationsPage({ onNavigate }: Props) {
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const notifications = useNotifications(scope, 50);
+  const notifications = useNotifications(50);
   const items = unreadOnly ? notifications.items.filter((item) => !item.read) : notifications.items;
   const openNotification = async (item: AppNotification) => {
     try { await notifications.markRead(item); } catch { /* Navigation does not depend on read persistence. */ }

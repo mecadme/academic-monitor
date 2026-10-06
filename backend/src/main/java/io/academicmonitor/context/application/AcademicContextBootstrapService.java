@@ -8,33 +8,37 @@ import io.academicmonitor.institution.domain.InstitutionMembership;
 import io.academicmonitor.institution.domain.InstitutionMembershipRepository;
 import io.academicmonitor.institution.domain.InstitutionRepository;
 import io.academicmonitor.institution.domain.InstitutionRole;
-import java.util.List;
-import java.util.Optional;
+import org.springframework.context.annotation.Profile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Profile("dev")
 public class AcademicContextBootstrapService {
 
     private final UserRepository userRepository;
     private final InstitutionRepository institutionRepository;
     private final InstitutionMembershipRepository membershipRepository;
     private final AcademicContextProperties properties;
+    private final PasswordEncoder passwordEncoder;
 
     public AcademicContextBootstrapService(
             UserRepository userRepository,
             InstitutionRepository institutionRepository,
             InstitutionMembershipRepository membershipRepository,
-            AcademicContextProperties properties) {
+            AcademicContextProperties properties,
+            PasswordEncoder passwordEncoder) {
 
         this.userRepository = userRepository;
         this.institutionRepository = institutionRepository;
         this.membershipRepository = membershipRepository;
         this.properties = properties;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional
-    public AcademicContextResult bootstrap() {
+    public void bootstrap() {
 
         User bootstrapUser = new User(properties.userEmail());
 
@@ -42,18 +46,21 @@ public class AcademicContextBootstrapService {
                 .findByEmail(bootstrapUser.getEmail())
                 .orElseGet(() -> userRepository.save(bootstrapUser));
 
-        List<InstitutionMembership> activeMemberships = membershipRepository.findByUserId(user.getId()).stream()
-                .filter(InstitutionMembership::isActive)
-                .toList();
-
-        if (activeMemberships.size() > 1) {
-            throw new IllegalStateException("Bootstrap user has multiple active institution memberships");
+        if (!user.isActive()) {
+            return;
         }
 
-        if (activeMemberships.size() == 1) {
-            Institution institution = resolveInstitution(activeMemberships.get(0));
+        if (user.getPasswordHash() == null
+                && properties.password() != null
+                && !properties.password().isBlank()) {
+            user.setPasswordHash(passwordEncoder.encode(properties.password()));
+            userRepository.save(user);
+        }
 
-            return new AcademicContextResult(institution.getId(), user.getId());
+        // Existing memberships (including disabled/multiple memberships) are never rewritten.
+        // Institution selection belongs to login, not development initialization.
+        if (!membershipRepository.findByUserId(user.getId()).isEmpty()) {
+            return;
         }
 
         Institution institution =
@@ -61,42 +68,5 @@ public class AcademicContextBootstrapService {
 
         membershipRepository.save(
                 new InstitutionMembership(user.getId(), institution.getId(), InstitutionRole.TEACHER));
-
-        return new AcademicContextResult(institution.getId(), user.getId());
-    }
-
-    @Transactional(readOnly = true)
-    public Optional<AcademicContextResult> currentTeacherContext() {
-        // Resolve the same server-configured user as bootstrap, without creating any data.
-        return userRepository
-                .findByEmail(new User(properties.userEmail()).getEmail())
-                .flatMap(user -> {
-                    List<InstitutionMembership> activeMemberships =
-                            membershipRepository.findByUserId(user.getId()).stream()
-                                    .filter(InstitutionMembership::isActive)
-                                    .toList();
-                    if (activeMemberships.size() != 1
-                            || activeMemberships.getFirst().getInstitutionRole() != InstitutionRole.TEACHER) {
-                        return Optional.empty();
-                    }
-                    return institutionRepository
-                            .findById(activeMemberships.getFirst().getInstitutionId())
-                            .filter(Institution::isActive)
-                            .map(institution -> new AcademicContextResult(institution.getId(), user.getId()));
-                });
-    }
-
-    private Institution resolveInstitution(InstitutionMembership membership) {
-
-        Institution institution = institutionRepository
-                .findById(membership.getInstitutionId())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Bootstrap user's active membership references a missing institution"));
-
-        if (!institution.isActive()) {
-            throw new IllegalStateException("Bootstrap user's active membership references an inactive institution");
-        }
-
-        return institution;
     }
 }

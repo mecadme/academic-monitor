@@ -137,20 +137,11 @@ describe(
             'teacher@example.com',
           password:
             'secret-password',
-          institutionId:
-            'institution-1',
-          teacherUserId:
-            'teacher-1',
         });
 
         expect(
           mockGetIdukayPeriods,
-        ).toHaveBeenCalledWith({
-          institutionId:
-            'institution-1',
-          teacherUserId:
-            'teacher-1',
-        });
+        ).toHaveBeenCalledWith();
 
         expect(
           result.current.connected,
@@ -226,10 +217,6 @@ describe(
         expect(
           mockSyncIdukayPeriod,
         ).toHaveBeenCalledWith({
-          institutionId:
-            'institution-1',
-          teacherUserId:
-            'teacher-1',
           periodExternalId:
             'period-t2',
         });

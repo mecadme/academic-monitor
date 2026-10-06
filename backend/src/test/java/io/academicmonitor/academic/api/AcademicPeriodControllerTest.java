@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.academicmonitor.academic.application.AcademicPeriodCatalogQueryService;
 import io.academicmonitor.academic.application.AcademicPeriodCatalogResponse;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,8 +29,11 @@ class AcademicPeriodControllerTest {
 
     @BeforeEach
     void setUp() {
+        AuthenticatedAcademicContext context = mock(AuthenticatedAcademicContext.class);
+        when(context.institutionId()).thenReturn(INSTITUTION_ID);
+        when(context.userId()).thenReturn(TEACHER_ID);
         service = mock(AcademicPeriodCatalogQueryService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new AcademicPeriodController(service))
+        mockMvc = MockMvcBuilders.standaloneSetup(new AcademicPeriodController(service, context))
                 .build();
     }
 
@@ -69,10 +73,10 @@ class AcademicPeriodControllerTest {
     }
 
     @Test
-    void requiresBothScopeParameters() throws Exception {
+    void doesNotRequireClientScopeParameters() throws Exception {
         mockMvc.perform(get("/api/v1/academic-periods").queryParam("institutionId", INSTITUTION_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/academic-periods").queryParam("teacherUserId", TEACHER_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
     }
 }

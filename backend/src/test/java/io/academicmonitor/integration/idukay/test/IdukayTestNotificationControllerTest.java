@@ -1,19 +1,24 @@
 package io.academicmonitor.integration.idukay.test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.academicmonitor.communication.application.ManualNotificationRequest;
 import io.academicmonitor.communication.application.ManualNotificationResult;
 import io.academicmonitor.communication.application.ManualNotificationService;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -25,9 +30,12 @@ class IdukayTestNotificationControllerTest {
 
     @BeforeEach
     void setUp() {
+        AuthenticatedAcademicContext context = mock(AuthenticatedAcademicContext.class);
+        when(context.institutionId()).thenReturn(UUID.fromString("22222222-2222-2222-2222-222222222222"));
+        when(context.userId()).thenReturn(UUID.fromString("33333333-3333-3333-3333-333333333333"));
         service = mock(ManualNotificationService.class);
         directService = mock(IdukayDirectTestNotificationService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new IdukayTestNotificationController(service, directService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new IdukayTestNotificationController(service, directService, context))
                 .build();
     }
 
@@ -43,8 +51,8 @@ class IdukayTestNotificationControllerTest {
                                 .content(
                                         """
                                 {
-                                  "institutionId":"22222222-2222-2222-2222-222222222222",
-                                  "teacherUserId":"33333333-3333-3333-3333-333333333333",
+                                  "institutionId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                                  "teacherUserId":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
                                   "studentId":"44444444-4444-4444-4444-444444444444",
                                   "subject":"Subject",
                                   "content":"<p>Content</p>"
@@ -56,6 +64,14 @@ class IdukayTestNotificationControllerTest {
                 .andExpect(jsonPath("$.sender").doesNotExist())
                 .andExpect(jsonPath("$.externalUserId").doesNotExist())
                 .andExpect(jsonPath("$.parentProfileId").doesNotExist());
+        var captured = ArgumentCaptor.forClass(ManualNotificationRequest.class);
+        verify(service).send(captured.capture());
+        assertEquals(
+                UUID.fromString("22222222-2222-2222-2222-222222222222"),
+                captured.getValue().institutionId());
+        assertEquals(
+                UUID.fromString("33333333-3333-3333-3333-333333333333"),
+                captured.getValue().teacherUserId());
     }
 
     @Test
@@ -69,7 +85,6 @@ class IdukayTestNotificationControllerTest {
                                 .content(
                                         """
                                 {
-                                  "institutionId":"22222222-2222-2222-2222-222222222222",
                                   "subject":"Subject",
                                   "content":"<p>Content</p>"
                                 }
@@ -80,11 +95,20 @@ class IdukayTestNotificationControllerTest {
                 .andExpect(jsonPath("$.recipient").doesNotExist())
                 .andExpect(jsonPath("$.externalUserId").doesNotExist())
                 .andExpect(jsonPath("$.parentProfileId").doesNotExist());
+        var captured = ArgumentCaptor.forClass(IdukayDirectTestNotificationCommand.class);
+        verify(directService).send(captured.capture());
+        assertEquals(
+                UUID.fromString("22222222-2222-2222-2222-222222222222"),
+                captured.getValue().institutionId());
+        assertEquals(
+                UUID.fromString("33333333-3333-3333-3333-333333333333"),
+                captured.getValue().teacherUserId());
     }
 
     @ParameterizedTest
     @ValueSource(
             strings = {
+                "institutionId",
                 "guardianId",
                 "recipient",
                 "externalUserId",
@@ -100,7 +124,6 @@ class IdukayTestNotificationControllerTest {
                         .content(String.format(
                                 """
                                 {
-                                  "institutionId":"22222222-2222-2222-2222-222222222222",
                                   "subject":"Subject",
                                   "content":"<p>Content</p>",
                                   "%s":"attacker-controlled"

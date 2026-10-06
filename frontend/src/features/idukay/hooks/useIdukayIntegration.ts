@@ -81,15 +81,10 @@ export function useIdukayIntegration({
       await testIdukayLogin({
         email,
         password,
-        institutionId,
-        teacherUserId,
       });
 
       const periodResult =
-        await getIdukayPeriods({
-          institutionId,
-          teacherUserId,
-        });
+        await getIdukayPeriods();
 
       setAcademicYear(
         periodResult.academicYear,
@@ -145,8 +140,6 @@ export function useIdukayIntegration({
 
       const result =
         await syncIdukayPeriod({
-          institutionId,
-          teacherUserId,
           periodExternalId:
           periodExternalId,
         });

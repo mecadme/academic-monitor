@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.academicmonitor.dashboard.application.AcademicDashboardQueryService;
 import io.academicmonitor.dashboard.application.AcademicDashboardResponse;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,8 +28,11 @@ class AcademicDashboardControllerTest {
 
     @BeforeEach
     void setUp() {
+        AuthenticatedAcademicContext context = mock(AuthenticatedAcademicContext.class);
+        when(context.institutionId()).thenReturn(INSTITUTION_ID);
+        when(context.userId()).thenReturn(TEACHER_USER_ID);
         service = mock(AcademicDashboardQueryService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new AcademicDashboardController(service))
+        mockMvc = MockMvcBuilders.standaloneSetup(new AcademicDashboardController(service, context))
                 .build();
     }
 
@@ -60,15 +64,15 @@ class AcademicDashboardControllerTest {
     }
 
     @Test
-    void requiresInstitutionId() throws Exception {
+    void doesNotRequireInstitutionId() throws Exception {
         mockMvc.perform(get("/api/v1/dashboard").queryParam("teacherUserId", TEACHER_USER_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void requiresTeacherUserId() throws Exception {
+    void doesNotRequireTeacherUserId() throws Exception {
         mockMvc.perform(get("/api/v1/dashboard").queryParam("institutionId", INSTITUTION_ID.toString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
     }
 
     @Test

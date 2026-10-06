@@ -5,6 +5,7 @@ import io.academicmonitor.academic.application.AcademicSyncService;
 import io.academicmonitor.academic.application.port.AcademicPlatformContext;
 import io.academicmonitor.academic.application.port.AcademicPlatformFilter;
 import io.academicmonitor.academic.application.port.AcademicPlatformSnapshot;
+import io.academicmonitor.identity.application.AuthenticatedAcademicContext;
 import io.academicmonitor.integration.idukay.IdukayAcademicPlatformAdapter;
 import io.academicmonitor.integration.idukay.auth.IdukayAuthenticatedSession;
 import io.academicmonitor.integration.idukay.auth.IdukaySessionProvider;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,27 +26,20 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Profile("dev")
 @RequestMapping("/api/v1/integrations/idukay")
 @ConditionalOnProperty(prefix = "app.idukay", name = "test-login-enabled", havingValue = "true")
 public class IdukayTestSnapshotController {
 
     private static final String PLATFORM_CODE = "IDUKAY";
 
+    private final AuthenticatedAcademicContext academicContext;
     private final IdukayAcademicPlatformAdapter adapter;
     private final AcademicSyncService syncService;
     private final IdukaySessionProvider sessionProvider;
     private final IdukayTeacherCoursesClient teacherCoursesClient;
     private final IdukayCoursePeriodClient coursePeriodClient;
     private final AppNotificationService notificationService;
-
-    IdukayTestSnapshotController(
-            IdukayAcademicPlatformAdapter adapter,
-            AcademicSyncService syncService,
-            IdukaySessionProvider sessionProvider,
-            IdukayTeacherCoursesClient teacherCoursesClient,
-            IdukayCoursePeriodClient coursePeriodClient) {
-        this(adapter, syncService, sessionProvider, teacherCoursesClient, coursePeriodClient, null);
-    }
 
     @Autowired
     public IdukayTestSnapshotController(
@@ -53,7 +48,9 @@ public class IdukayTestSnapshotController {
             IdukaySessionProvider sessionProvider,
             IdukayTeacherCoursesClient teacherCoursesClient,
             IdukayCoursePeriodClient coursePeriodClient,
-            AppNotificationService notificationService) {
+            AppNotificationService notificationService,
+            AuthenticatedAcademicContext academicContext) {
+        this.academicContext = academicContext;
 
         this.adapter = adapter;
         this.syncService = syncService;
@@ -64,9 +61,10 @@ public class IdukayTestSnapshotController {
     }
 
     @GetMapping("/test-periods")
-    public TestPeriodsResponse testPeriods(@RequestParam UUID institutionId, @RequestParam UUID teacherUserId) {
+    public TestPeriodsResponse testPeriods() {
 
-        AcademicPlatformContext context = new AcademicPlatformContext(institutionId, teacherUserId);
+        AcademicPlatformContext context =
+                new AcademicPlatformContext(academicContext.institutionId(), academicContext.userId());
 
         IdukayAuthenticatedSession session = sessionProvider.getSession(context);
 
@@ -87,9 +85,10 @@ public class IdukayTestSnapshotController {
     }
 
     @GetMapping("/test-snapshot")
-    public TestSnapshotResponse testSnapshot(@RequestParam UUID institutionId, @RequestParam UUID teacherUserId) {
+    public TestSnapshotResponse testSnapshot() {
 
-        AcademicPlatformContext context = new AcademicPlatformContext(institutionId, teacherUserId);
+        AcademicPlatformContext context =
+                new AcademicPlatformContext(academicContext.institutionId(), academicContext.userId());
 
         AcademicPlatformSnapshot snapshot = adapter.fetchSnapshot(context);
 
@@ -112,10 +111,10 @@ public class IdukayTestSnapshotController {
     }
 
     @GetMapping("/test-filtered-snapshot")
-    public TestFilteredSnapshotResponse testFilteredSnapshot(
-            @RequestParam UUID institutionId, @RequestParam UUID teacherUserId, @RequestParam String periodExternalId) {
+    public TestFilteredSnapshotResponse testFilteredSnapshot(@RequestParam String periodExternalId) {
 
-        AcademicPlatformContext context = new AcademicPlatformContext(institutionId, teacherUserId);
+        AcademicPlatformContext context =
+                new AcademicPlatformContext(academicContext.institutionId(), academicContext.userId());
 
         AcademicPlatformFilter filter = new AcademicPlatformFilter(periodExternalId);
 
@@ -135,8 +134,9 @@ public class IdukayTestSnapshotController {
     }
 
     @PostMapping("/test-sync")
-    public TestBatchSyncResponse testSync(
-            @RequestParam UUID institutionId, @RequestParam UUID teacherUserId, @RequestParam String periodExternalId) {
+    public TestBatchSyncResponse testSync(@RequestParam String periodExternalId) {
+        UUID institutionId = academicContext.institutionId();
+        UUID teacherUserId = academicContext.userId();
 
         AcademicPlatformFilter filter = new AcademicPlatformFilter(periodExternalId);
 

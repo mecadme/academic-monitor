@@ -7,4 +7,10 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "app.bootstrap")
 public record AcademicContextProperties(
-        @NotBlank String userEmail, @NotBlank String institutionName, @NotBlank String timezone) {}
+        @NotBlank String userEmail, @NotBlank String institutionName, @NotBlank String timezone, String password) {
+
+    @Override
+    public String toString() {
+        return "AcademicContextProperties[password=REDACTED]";
+    }
+}
