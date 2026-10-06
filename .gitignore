@@ -4,8 +4,10 @@
 !.env.example
 *.pem
 *.key
-*token*
-*cookies*
+*.token
+*.tokens
+*.cookies
+*.cookiejar
 
 # Logs
 logs/

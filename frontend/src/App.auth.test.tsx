@@ -50,7 +50,9 @@ describe('authentication', () => {
   it('shows accessible login at /login and never loads protected data before authentication', async () => {
     const fetchMock = setup();
     await screen.findByRole('heading', { name: 'Iniciar sesión' });
-    expect(window.location.pathname).toBe('/login');
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/login');
+    });
     expect(screen.getByLabelText('Correo electrónico')).toHaveAttribute('autocomplete', 'email');
     expect(screen.getByLabelText('Contraseña')).toHaveAttribute('autocomplete', 'current-password');
     expect(screen.getByLabelText('Contraseña')).toHaveAttribute('type', 'password');
